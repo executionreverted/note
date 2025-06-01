@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "schema": [
+    {
+      "id": 0,
+      "name": "@autonote/remove-writer",
+      "requestType": "@autonote/writer",
+      "version": 1
+    },
+    {
+      "id": 1,
+      "name": "@autonote/add-writer",
+      "requestType": "@autonote/writer",
+      "version": 1
+    },
+    {
+      "id": 2,
+      "name": "@autonote/update-profile",
+      "requestType": "@autonote/profile",
+      "version": 1
+    },
+    {
+      "id": 3,
+      "name": "@autonote/create-group",
+      "requestType": "@autonote/group",
+      "version": 1
+    },
+    {
+      "id": 4,
+      "name": "@autonote/update-group",
+      "requestType": "@autonote/group",
+      "version": 1
+    },
+    {
+      "id": 5,
+      "name": "@autonote/delete-group",
+      "requestType": "@autonote/delete",
+      "version": 1
+    },
+    {
+      "id": 6,
+      "name": "@autonote/create-page",
+      "requestType": "@autonote/page",
+      "version": 1
+    },
+    {
+      "id": 7,
+      "name": "@autonote/update-page",
+      "requestType": "@autonote/page",
+      "version": 1
+    },
+    {
+      "id": 8,
+      "name": "@autonote/delete-page",
+      "requestType": "@autonote/delete",
+      "version": 1
+    },
+    {
+      "id": 9,
+      "name": "@autonote/add-fileref",
+      "requestType": "@autonote/fileref",
+      "version": 1
+    },
+    {
+      "id": 10,
+      "name": "@autonote/delete-fileref",
+      "requestType": "@autonote/delete",
+      "version": 1
+    },
+    {
+      "id": 11,
+      "name": "@autonote/add-invite",
+      "requestType": "@autonote/invite",
+      "version": 1
+    },
+    {
+      "id": 12,
+      "name": "@autonote/del-invite",
+      "requestType": "@autonote/invite",
+      "version": 1
+    }
+  ]
+}

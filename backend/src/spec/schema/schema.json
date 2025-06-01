@@ -1,0 +1,285 @@
+{
+  "version": 2,
+  "schema": [
+    {
+      "name": "profile",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "userId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "displayName",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "email",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "avatar",
+          "required": false,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "group",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "parentId",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "color",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "icon",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "page",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "content",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "groupId",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "tags",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "starred",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "fileref",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "pageId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "filename",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "mimeType",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "size",
+          "required": false,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "driveKey",
+          "required": false,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "blobId",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "writer",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "delete",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "del-invite",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "invite",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "buffer",
+          "version": 2
+        },
+        {
+          "name": "invite",
+          "required": true,
+          "type": "buffer",
+          "version": 2
+        },
+        {
+          "name": "publicKey",
+          "required": true,
+          "type": "buffer",
+          "version": 2
+        },
+        {
+          "name": "expires",
+          "required": true,
+          "type": "int",
+          "version": 2
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "version": 0,
+  "offset": 0,
+  "schema": [
+    {
+      "name": "profile",
+      "namespace": "autonote",
+      "id": 0,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/profile",
+      "derived": false,
+      "key": [
+        "userId"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "groups",
+      "namespace": "autonote",
+      "id": 1,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/group",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "pages",
+      "namespace": "autonote",
+      "id": 2,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/page",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "filerefs",
+      "namespace": "autonote",
+      "id": 3,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/fileref",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "invite",
+      "namespace": "autonote",
+      "id": 4,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/invite",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "writer",
+      "namespace": "autonote",
+      "id": 5,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/writer",
+      "derived": false,
+      "key": [
+        "key"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "delete",
+      "namespace": "autonote",
+      "id": 6,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/delete",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "del-invite",
+      "namespace": "autonote",
+      "id": 7,
+      "type": 1,
+      "indexes": [],
+      "schema": "@autonote/del-invite",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    }
+  ]
+}
