@@ -66,7 +66,6 @@ async function main() {
   console.log('\nProfile on device 2:', profile2)
 
   const groups2 = await note2.listGroups()
-  console.log(groups2)
   console.log('\nGroups on device 2:', groups2.map(g => g.name))
 
   const pages2 = await note2.listPages()

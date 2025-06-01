@@ -311,7 +311,7 @@ class Autonote extends ReadyResource {
   async deleteGroup(id) {
     // Check if group has pages
     const pages = await this.getPagesByGroup(id)
-    if (pages.length > 0) {
+    if (pages.some(p => p.groupId == id)) {
       throw new Error('Cannot delete group with pages')
     }
 
@@ -362,12 +362,12 @@ class Autonote extends ReadyResource {
   }
 
   async deletePage(id) {
-    // Also delete associated file references
-    const filerefs = await this.getFileRefs(id)
-    for (const ref of filerefs) {
-      await this.deleteFileRef(ref.id)
-    }
-
+    // TODO Also delete associated file references
+    // const filerefs = await this.getFileRefs(id)
+    // for (const ref of filerefs) {
+    //   await this.deleteFileRef(ref.id)
+    // }
+    //
     await this.base.append(dispatch('@autonote/delete-page', { id }))
   }
 
@@ -391,7 +391,6 @@ class Autonote extends ReadyResource {
     }
 
     const pages = await (await this.base.view.find('@autonote/pages', query)).toArray()
-    console.log(pages)
 
     return pages.map(page => ({ ...page, tags: JSON.parse(page.tags || '[]') }))
   }
