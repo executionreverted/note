@@ -34,11 +34,7 @@
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
-<div
-  class="modal-backdrop"
-  on:keydown|stopPropagation
-  on:click={() => dispatch("close")}
->
+<div class="modal-backdrop" on:click={() => dispatch("close")}>
   <div class="modal" on:click|stopPropagation on:keydown|stopPropagation>
     <div class="modal-header">
       <h2>Profile Settings</h2>

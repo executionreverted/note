@@ -102,7 +102,7 @@
     on:keypress={() => (showCreateModal = false)}
     on:click={() => (showCreateModal = false)}
   >
-    <div class="modal" on:keypress|stopPropagation on:click|stopPropagation>
+    <div class="modal" on:click|stopPropagation>
       <h2>Create New Vault</h2>
 
       <div class="form-group">

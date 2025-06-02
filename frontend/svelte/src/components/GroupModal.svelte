@@ -60,12 +60,8 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div
-  class="modal-backdrop"
-  on:keydown|stopPropagation
-  on:click={() => dispatch("close")}
->
-  <div class="modal" on:keydown|stopPropagation on:click|stopPropagation>
+<div class="modal-backdrop" on:click={() => dispatch("close")}>
+  <div class="modal" on:click|stopPropagation>
     <div class="modal-header">
       <h2>{group ? "Edit Group" : "Create Group"}</h2>
       <button class="close-btn" on:click={() => dispatch("close")}>×</button>

@@ -48,6 +48,7 @@
 
   function startEditing() {
     isEditing = true;
+    console.log("Start edit");
   }
 
   function stopEditing() {

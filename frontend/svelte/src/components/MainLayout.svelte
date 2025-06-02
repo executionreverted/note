@@ -48,24 +48,28 @@
     currentPage.set(null);
   }
 
-  function editGroup(group: Group) {
+  function editGroup(group: Group, event: Event) {
+    event.stopPropagation();
     editingGroup = group;
     showGroupModal = true;
   }
 
-  function createGroup(parentId?: string) {
+  function createGroup(parentId?: string, event?: Event) {
+    if (event) event.stopPropagation();
     editingGroup = null;
     selectedGroupId.set(parentId || null);
     showGroupModal = true;
   }
 
-  async function deleteGroup(group: Group) {
+  async function deleteGroup(group: Group, event: Event) {
+    event.stopPropagation();
     if (confirm(`Delete "${group.name}" and all its pages?`)) {
       await storeActions.deleteGroup(group.id);
     }
   }
 
-  async function deletePage(page: Page) {
+  async function deletePage(page: Page, event: Event) {
+    event.stopPropagation();
     if (confirm(`Delete "${page.title}"?`)) {
       await storeActions.deletePage(page.id);
     }
@@ -82,11 +86,7 @@
   <div class="sidebar" style="width: {sidebarWidth}px">
     <!-- Profile Section -->
     <div class="profile-section">
-      <div
-        class="profile-info"
-        on:keydown|stopPropagation
-        on:click={() => (showProfileModal = true)}
-      >
+      <div class="profile-info" on:click={() => (showProfileModal = true)}>
         <div class="avatar">
           {$profile?.displayName?.charAt(0) || "?"}
         </div>
@@ -123,7 +123,6 @@
     <div class="nav-section">
       <!-- All Pages -->
       <div
-        on:keydown|stopPropagation
         class="nav-item"
         class:active={$selectedGroupId === null}
         on:click={() => selectGroup(null)}
@@ -138,7 +137,7 @@
         <span>Groups</span>
         <button
           class="btn-icon"
-          on:click={() => createGroup()}
+          on:click={(e) => createGroup(undefined, e)}
           title="Create Group"
         >
           create
@@ -148,29 +147,24 @@
       {#each $groupsTree as group (group.id)}
         <div class="group-tree">
           <div
-            on:keydown|stopPropagation
             class="nav-item group-item"
             class:active={$selectedGroupId === group.id}
             on:click={() => selectGroup(group.id)}
           >
-            <span class="nav-icon">group</span>
+            <span class="nav-icon">-</span>
             <span class="nav-label">{group.name}</span>
             <span class="nav-count"
               >{$pages.filter((p) => p.groupId === group.id).length}</span
             >
             <div class="group-actions">
-              <button
-                class="btn-icon"
-                on:click|stopPropagation={() => createGroup(group.id)}
-                >create</button
+              <!-- <button -->
+              <!--   class="btn-icon" -->
+              <!--   on:click={(e) => createGroup(group.id, e)}>create</button -->
+              <!-- > -->
+              <button class="btn-icon" on:click={(e) => editGroup(group, e)}
+                >edit</button
               >
-              <button
-                class="btn-icon"
-                on:click|stopPropagation={() => editGroup(group)}>edit</button
-              >
-              <button
-                class="btn-icon"
-                on:click|stopPropagation={() => deleteGroup(group)}
+              <button class="btn-icon" on:click={(e) => deleteGroup(group, e)}
                 >delete</button
               >
             </div>
@@ -180,12 +174,11 @@
             <div class="subgroups">
               {#each group.children as subgroup (subgroup.id)}
                 <div
-                  on:keydown|stopPropagation
                   class="nav-item subgroup-item"
                   class:active={$selectedGroupId === subgroup.id}
                   on:click={() => selectGroup(subgroup.id)}
                 >
-                  <span class="nav-icon">group</span>
+                  <span class="nav-icon">-</span>
                   <span class="nav-label">{subgroup.name}</span>
                   <span class="nav-count"
                     >{$pages.filter((p) => p.groupId === subgroup.id)
@@ -194,13 +187,11 @@
                   <div class="group-actions">
                     <button
                       class="btn-icon"
-                      on:click|stopPropagation={() => editGroup(subgroup)}
-                      >edit</button
+                      on:click={(e) => editGroup(subgroup, e)}>edit</button
                     >
                     <button
                       class="btn-icon"
-                      on:click|stopPropagation={() => deleteGroup(subgroup)}
-                      >delete</button
+                      on:click={(e) => deleteGroup(subgroup, e)}>delete</button
                     >
                   </div>
                 </div>
@@ -223,7 +214,6 @@
       <div class="pages-list">
         {#each $filteredPages as page (page.id)}
           <div
-            on:keydown|stopPropagation
             class="page-item"
             class:active={$currentPage?.id === page.id}
             on:click={() => selectPage(page)}
@@ -242,7 +232,7 @@
             </div>
             <button
               class="btn-icon delete-page"
-              on:click|stopPropagation={() => deletePage(page)}
+              on:click={(e) => deletePage(page, e)}
               title="Delete page"
             >
               delete
@@ -597,3 +587,4 @@
     background-color: #357abd;
   }
 </style>
+

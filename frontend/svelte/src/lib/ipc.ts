@@ -1,7 +1,4 @@
 // frontend/svelte/src/lib/ipc.ts
-import type { IpcRendererEvent } from 'electron'
-import { ipcRenderer } from 'electron'
-
 export interface Profile {
   userId: string
   displayName: string
@@ -41,12 +38,19 @@ export interface Vault {
 
 class IpcBridge {
   private listeners = new Map<string, Function[]>()
+  private electronAPI: any
 
   constructor() {
-    // Set up IPC event forwarding
-    ipcRenderer.on('vault-event', (event: IpcRendererEvent, data: any) => {
-      this.emit(data.type, data.payload)
-    })
+    // Handle both electron contexts
+    this.electronAPI = (window as any).electronAPI || (window as any).require?.('electron')?.ipcRenderer
+
+    if (this.electronAPI) {
+      if (this.electronAPI.on) {
+        this.electronAPI.on('vault-event', (event: any, data: any) => {
+          this.emit(data.type, data.payload)
+        })
+      }
+    }
   }
 
   // Event system
@@ -72,98 +76,109 @@ class IpcBridge {
     }
   }
 
+  private async invoke(channel: string, data?: any) {
+    if (this.electronAPI?.invoke) {
+      return await this.electronAPI.invoke(channel, data)
+    }
+    throw new Error('Electron API not available')
+  }
+
   // Vault management
   async listVaults(): Promise<Vault[]> {
-    return await ipcRenderer.invoke('vault:list')
+    try {
+      return await this.invoke('vault:list')
+    } catch {
+      return []
+    }
   }
 
   async createVault(name: string, path: string): Promise<Vault> {
-    return await ipcRenderer.invoke('vault:create', { name, path })
+    return await this.invoke('vault:create', { name, path })
   }
 
   async openVault(path: string): Promise<boolean> {
-    return await ipcRenderer.invoke('vault:open', { path })
+    return await this.invoke('vault:open', { path })
   }
 
   async closeVault(): Promise<void> {
-    return await ipcRenderer.invoke('vault:close')
+    return await this.invoke('vault:close')
   }
 
   // Profile methods
   async getProfile(): Promise<Profile | null> {
-    return await ipcRenderer.invoke('profile:get')
+    return await this.invoke('profile:get')
   }
 
   async updateProfile(profile: Partial<Profile>): Promise<Profile> {
-    return await ipcRenderer.invoke('profile:update', profile)
+    return await this.invoke('profile:update', profile)
   }
 
   // Group methods
   async createGroup(name: string, parentId?: string, options?: { color?: string, icon?: string }): Promise<Group> {
-    return await ipcRenderer.invoke('group:create', { name, parentId, ...options })
+    return await this.invoke('group:create', { name, parentId, ...options })
   }
 
   async updateGroup(id: string, updates: Partial<Group>): Promise<Group> {
-    return await ipcRenderer.invoke('group:update', { id, updates })
+    return await this.invoke('group:update', { id, updates })
   }
 
   async deleteGroup(id: string): Promise<void> {
-    return await ipcRenderer.invoke('group:delete', { id })
+    return await this.invoke('group:delete', { id })
   }
 
   async getGroup(id: string): Promise<Group | null> {
-    return await ipcRenderer.invoke('group:get', { id })
+    return await this.invoke('group:get', { id })
   }
 
   async listGroups(): Promise<Group[]> {
-    return await ipcRenderer.invoke('group:list')
+    return await this.invoke('group:list')
   }
 
   // Page methods
   async createPage(title: string, content?: string, groupId?: string, options?: { tags?: string[], starred?: boolean }): Promise<Page> {
-    return await ipcRenderer.invoke('page:create', { title, content, groupId, ...options })
+    return await this.invoke('page:create', { title, content, groupId, ...options })
   }
 
   async updatePage(id: string, updates: Partial<Page>): Promise<Page> {
-    return await ipcRenderer.invoke('page:update', { id, updates })
+    return await this.invoke('page:update', { id, updates })
   }
 
   async deletePage(id: string): Promise<void> {
-    return await ipcRenderer.invoke('page:delete', { id })
+    return await this.invoke('page:delete', { id })
   }
 
   async getPage(id: string): Promise<Page | null> {
-    return await ipcRenderer.invoke('page:get', { id })
+    return await this.invoke('page:get', { id })
   }
 
   async listPages(options?: { groupId?: string, starred?: boolean }): Promise<Page[]> {
-    return await ipcRenderer.invoke('page:list', options)
+    return await this.invoke('page:list', options)
   }
 
   async searchPages(searchTerm: string): Promise<Page[]> {
-    return await ipcRenderer.invoke('page:search', { searchTerm })
+    return await this.invoke('page:search', { searchTerm })
   }
 
   // Invite methods
   async createInvite(): Promise<string> {
-    return await ipcRenderer.invoke('invite:create')
+    return await this.invoke('invite:create')
   }
 
   async deleteInvite(): Promise<void> {
-    return await ipcRenderer.invoke('invite:delete')
+    return await this.invoke('invite:delete')
   }
 
   async acceptInvite(invite: string, vaultPath: string): Promise<boolean> {
-    return await ipcRenderer.invoke('invite:accept', { invite, vaultPath })
+    return await this.invoke('invite:accept', { invite, vaultPath })
   }
 
   // Writer management
   async addWriter(key: string): Promise<boolean> {
-    return await ipcRenderer.invoke('writer:add', { key })
+    return await this.invoke('writer:add', { key })
   }
 
   async removeWriter(key: string): Promise<void> {
-    return await ipcRenderer.invoke('writer:remove', { key })
+    return await this.invoke('writer:remove', { key })
   }
 }
 
