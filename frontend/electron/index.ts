@@ -1,7 +1,4 @@
-//-------------------------
-// Updated Electron main file with Autonote integration
-//-------------------------
-
+// frontend/electron/index.ts - Updated with version control
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { IpcMainEvent } from 'electron/main'
 import * as path from 'path'
@@ -15,7 +12,6 @@ let currentAutonote: any = null
 let vaultsConfig: any = {}
 const configPath = path.join(app.getPath('userData'), 'vaults.json')
 
-// Load vaults configuration
 function loadVaultsConfig() {
   try {
     if (fs.existsSync(configPath)) {
@@ -27,7 +23,6 @@ function loadVaultsConfig() {
   }
 }
 
-// Save vaults configuration
 function saveVaultsConfig() {
   try {
     fs.writeFileSync(configPath, JSON.stringify(vaultsConfig, null, 2))
@@ -36,25 +31,21 @@ function saveVaultsConfig() {
   }
 }
 
-
-// Set up real-time sync listeners on Autonote instance
 function setupRealTimeSync(autonote: any) {
   console.log('Setting up real-time sync listeners')
 
-  // Listen for Autonote 'update' events - this fires when peers make changes
   autonote.on('update', () => {
-    console.log('🔄 Autonote update event - peer changes detected')
+    console.log('Autonote update event - peer changes detected')
     sendToRenderer('vault:realtime-update', {})
   })
 
-  // Additional sync events for more granular updates
   autonote.on('peer-connected', (peerInfo: any) => {
-    console.log('👥 Peer connected:', peerInfo)
+    console.log('Peer connected:', peerInfo)
     sendToRenderer('sync:peer-connected', peerInfo)
   })
 
   autonote.on('peer-disconnected', (peerInfo: any) => {
-    console.log('👥 Peer disconnected:', peerInfo)
+    console.log('Peer disconnected:', peerInfo)
     sendToRenderer('sync:peer-disconnected', peerInfo)
   })
 }
@@ -104,7 +95,6 @@ app.on('before-quit', async () => {
   }
 })
 
-// Utility functions
 function sendToRenderer(event: string, data: any) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('vault-event', { type: event, payload: data })
@@ -131,7 +121,6 @@ ipcMain.handle('vault:list', async () => {
 
 ipcMain.handle('vault:create', async (event, { name, path }) => {
   try {
-    // Ensure directory exists
     if (!fs.existsSync(path)) {
       fs.mkdirSync(path, { recursive: true })
     }
@@ -155,17 +144,14 @@ ipcMain.handle('vault:create', async (event, { name, path }) => {
 
 ipcMain.handle('vault:open', async (event, { path }) => {
   try {
-    // Close existing vault
     if (currentAutonote) {
       await currentAutonote.close()
     }
 
-    // Create new Autonote instance
     const store = new Corestore(path)
     currentAutonote = new Autonote(store)
     await currentAutonote.ready()
 
-    // Update last accessed time
     if (vaultsConfig.vaults) {
       const vault = vaultsConfig.vaults.find(v => v.path === path)
       if (vault) {
@@ -174,7 +160,6 @@ ipcMain.handle('vault:open', async (event, { path }) => {
       }
     }
 
-    // Set up event listeners
     currentAutonote.on('update', () => {
       sendToRenderer('vault:update', {})
     })
@@ -238,7 +223,7 @@ ipcMain.handle('group:list', async () => {
   return await currentAutonote.listGroups()
 })
 
-// Page handlers
+// Version-aware page handlers
 ipcMain.handle('page:create', async (event, { title, content, groupId, tags, starred }) => {
   if (!currentAutonote) throw new Error('No vault open')
   const page = await currentAutonote.createPage(title, content, groupId, { tags, starred })
@@ -246,11 +231,17 @@ ipcMain.handle('page:create', async (event, { title, content, groupId, tags, sta
   return page
 })
 
-ipcMain.handle('page:update', async (event, { id, updates }) => {
+ipcMain.handle('page:update', async (event, { id, updates, baseVersion }) => {
   if (!currentAutonote) throw new Error('No vault open')
-  const updated = await currentAutonote.updatePage(id, updates)
-  sendToRenderer('page:updated', updated)
-  return updated
+  try {
+    const updated = await currentAutonote.updatePage(id, updates, baseVersion)
+    sendToRenderer('page:updated', updated)
+    return updated
+  } catch (error) {
+    // Handle version conflicts or other update errors
+    console.error('Failed to update page:', error)
+    throw error
+  }
 })
 
 ipcMain.handle('page:delete', async (event, { id }) => {
@@ -262,6 +253,12 @@ ipcMain.handle('page:delete', async (event, { id }) => {
 ipcMain.handle('page:get', async (event, { id }) => {
   if (!currentAutonote) throw new Error('No vault open')
   return await currentAutonote.getPage(id)
+})
+
+// Get page with version info (for conflict detection)
+ipcMain.handle('page:getWithVersion', async (event, { id }) => {
+  if (!currentAutonote) throw new Error('No vault open')
+  return await currentAutonote.getPageWithVersion(id)
 })
 
 ipcMain.handle('page:list', async (event, options = {}) => {
@@ -287,22 +284,20 @@ ipcMain.handle('invite:delete', async () => {
 
 ipcMain.handle('invite:accept', async (event, { invite, vaultPath }) => {
   try {
-    // Close existing vault if open
     if (currentAutonote) {
       await currentAutonote.close()
     }
 
-    // Create new corestore for the paired vault
     const store = new Corestore(vaultPath)
     const pair = Autonote.pair(store, invite)
     currentAutonote = await pair.finished()
     await currentAutonote.ready()
 
-    // Set up event listeners
     currentAutonote.on('update', () => {
       sendToRenderer('vault:update', {})
     })
 
+    setupRealTimeSync(currentAutonote)
     return true
   } catch (error) {
     console.error('Failed to accept invite:', error)
@@ -321,9 +316,28 @@ ipcMain.handle('writer:remove', async (event, { key }) => {
   await currentAutonote.removeWriter(key)
 })
 
+// Version control helper
+ipcMain.handle('page:checkVersion', async (event, { id, lastKnownVersion }) => {
+  if (!currentAutonote) throw new Error('No vault open')
+  try {
+    const currentPage = await currentAutonote.getPageWithVersion(id)
+    if (!currentPage) return { exists: false }
+
+    return {
+      exists: true,
+      hasConflict: currentPage.updatedAt > lastKnownVersion,
+      currentVersion: currentPage.updatedAt,
+      page: currentPage
+    }
+  } catch (error) {
+    console.error('Failed to check page version:', error)
+    return { exists: false, error: error.message }
+  }
+})
+
 // Legacy test handler (can be removed)
 ipcMain.on('asynchronous-message', (event: IpcMainEvent, arg: string) => {
-  console.log(arg) // prints "ping"
+  console.log(arg)
   event.reply('asynchronous-reply', 'pong')
 })
 
@@ -331,7 +345,6 @@ ipcMain.on('asynchronous-message', (event: IpcMainEvent, arg: string) => {
 if (process.env.ELECTRON_MODE === 'dev') {
   console.log('electron-reloader active')
   try {
-    // eslint-disable-next-line
     require('electron-reloader')(module)
   } catch (error) {
     console.error(error)

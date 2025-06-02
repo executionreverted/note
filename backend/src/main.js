@@ -1,5 +1,4 @@
-// Autonote - A multi-device note-taking app powered by Autobase
-
+// backend/src/main.js - Updated with version control
 const Autobase = require('autobase')
 const BlindPairing = require('blind-pairing')
 const HyperDB = require('hyperdb')
@@ -9,8 +8,9 @@ const ReadyResource = require('ready-resource')
 const z32 = require('z32')
 const b4a = require('b4a')
 const { Router, dispatch } = require('./spec/hyperdispatch')
-const db = require('./spec/db/index.js') // Uncomment after running schema builder
+const db = require('./spec/db/index.js')
 const crypto = require('crypto')
+
 function nanoid() {
   return crypto.randomBytes(16).toString('hex')
 }
@@ -120,7 +120,6 @@ class Autonote extends ReadyResource {
     this.replicate = opts.replicate !== false
     this.debug = !!opts.key
 
-    // Register handlers for all commands
     this._registerHandlers()
     this._boot(opts)
     this.ready().catch(noop)
@@ -154,13 +153,43 @@ class Autonote extends ReadyResource {
       await context.view.delete('@autonote/groups', { id: data.id })
     })
 
-    // Page operations
+    // Version-aware page operations
     this.router.add('@autonote/create-page', async (data, context) => {
-      await context.view.insert('@autonote/pages', data)
+      // Add version metadata
+      const versionedData = {
+        ...data,
+        version: data.updatedAt,
+        authorKey: context.base.local?.key?.toString('hex').slice(0, 8) || 'unknown'
+      }
+      await context.view.insert('@autonote/pages', versionedData)
     })
 
     this.router.add('@autonote/update-page', async (data, context) => {
-      await context.view.insert('@autonote/pages', data)
+      // Check for version conflicts before updating
+      const existing = await context.view.get('@autonote/pages', { id: data.id })
+      const authorKey = context.base.local?.key?.toString('hex').slice(0, 8) || 'unknown'
+
+      if (existing && data.baseVersion && existing.version > data.baseVersion) {
+        // Version conflict detected - still save but mark as conflict
+        console.log('Version conflict detected for page:', data.id)
+        const conflictData = {
+          ...data,
+          version: data.updatedAt,
+          authorKey,
+          conflictWith: existing.version,
+          hasConflict: true
+        }
+        await context.view.insert('@autonote/pages', conflictData)
+      } else {
+        // No conflict, normal update
+        const versionedData = {
+          ...data,
+          version: data.updatedAt,
+          authorKey,
+          hasConflict: false
+        }
+        await context.view.insert('@autonote/pages', versionedData)
+      }
     })
 
     this.router.add('@autonote/delete-page', async (data, context) => {
@@ -170,19 +199,6 @@ class Autonote extends ReadyResource {
     // File reference operations
     this.router.add('@autonote/add-fileref', async (data, context) => {
       await context.view.insert('@autonote/filerefs', data)
-    })
-
-    this.router.add('@autonote/delete-fileref', async (data, context) => {
-      await context.view.delete('@autonote/filerefs', { id: data.id })
-    })
-
-    // Invite operations
-    this.router.add('@autonote/add-invite', async (data, context) => {
-      await context.view.insert('@autonote/invite', data)
-    })
-
-    this.router.add('@autonote/del-invite', async (data, context) => {
-      await context.view.delete('@autonote/invite', { id: data.id })
     })
 
     this.router.add('@autonote/delete-fileref', async (data, context) => {
@@ -303,7 +319,7 @@ class Autonote extends ReadyResource {
     const group = {
       ...existing,
       ...updates,
-      id, // ensure ID doesn't change
+      id,
       updatedAt: Date.now()
     }
 
@@ -312,7 +328,6 @@ class Autonote extends ReadyResource {
   }
 
   async deleteGroup(id) {
-    // Check if group has pages
     const pages = await this.getPagesByGroup(id)
     if (pages.some(p => p.groupId == id)) {
       throw new Error('Cannot delete group with pages')
@@ -327,11 +342,11 @@ class Autonote extends ReadyResource {
 
   async listGroups() {
     return await (await this.base.view.find('@autonote/groups', {})).toArray()
-
   }
 
-  // Page methods
+  // Version-aware page methods
   async createPage(title, content = '', groupId = null, options = {}) {
+    const now = Date.now()
     const page = {
       id: nanoid(),
       title,
@@ -339,42 +354,53 @@ class Autonote extends ReadyResource {
       groupId,
       tags: JSON.stringify(options.tags || []),
       starred: options.starred || false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: now,
+      updatedAt: now,
+      version: now
     }
 
     await this.base.append(dispatch('@autonote/create-page', page))
     return { ...page, tags: JSON.parse(page.tags) }
   }
 
-  async updatePage(id, updates) {
+  async updatePage(id, updates, baseVersion = null) {
     const existing = await this.getPage(id)
     if (!existing) throw new Error('Page not found')
 
-    // Handle tags - existing.tags is already parsed to array by getPage
+    const now = Date.now()
     const page = {
       ...existing,
       ...updates,
-      id, // ensure ID doesn't change
+      id,
       tags: JSON.stringify(updates.tags !== undefined ? updates.tags : existing.tags),
-      updatedAt: Date.now()
+      updatedAt: now,
+      version: now,
+      baseVersion: baseVersion || existing.updatedAt
     }
 
     await this.base.append(dispatch('@autonote/update-page', page))
-    return { ...page, tags: JSON.parse(page.tags) }
+
+    // Return without version metadata for frontend
+    const { baseVersion: _, authorKey, hasConflict, conflictWith, ...cleanPage } = page
+    return { ...cleanPage, tags: JSON.parse(cleanPage.tags) }
   }
 
   async deletePage(id) {
-    // TODO Also delete associated file references
-    // const filerefs = await this.getFileRefs(id)
-    // for (const ref of filerefs) {
-    //   await this.deleteFileRef(ref.id)
-    // }
-    //
     await this.base.append(dispatch('@autonote/delete-page', { id }))
   }
 
   async getPage(id) {
+    const page = (await this.base.view.get('@autonote/pages', { id }))
+    if (page) {
+      // Clean up version metadata for frontend
+      const { version, authorKey, hasConflict, conflictWith, baseVersion, ...cleanPage } = page
+      return { ...cleanPage, tags: JSON.parse(cleanPage.tags || '[]') }
+    }
+    return null
+  }
+
+  async getPageWithVersion(id) {
+    // Internal method that returns full version info
     const page = (await this.base.view.get('@autonote/pages', { id }))
     if (page) {
       return { ...page, tags: JSON.parse(page.tags || '[]') }
@@ -395,7 +421,11 @@ class Autonote extends ReadyResource {
 
     const pages = await (await this.base.view.find('@autonote/pages', query)).toArray()
 
-    return pages.map(page => ({ ...page, tags: JSON.parse(page.tags || '[]') }))
+    // Clean up version metadata for frontend
+    return pages.map(page => {
+      const { version, authorKey, hasConflict, conflictWith, baseVersion, ...cleanPage } = page
+      return { ...cleanPage, tags: JSON.parse(cleanPage.tags || '[]') }
+    })
   }
 
   async getPagesByGroup(groupId) {
@@ -403,7 +433,6 @@ class Autonote extends ReadyResource {
   }
 
   async searchPages(searchTerm) {
-    // Simple search - in future could use proper indexing
     const allPages = await this.listPages()
     const term = searchTerm.toLowerCase()
 
@@ -414,7 +443,7 @@ class Autonote extends ReadyResource {
     )
   }
 
-  // File reference methods (for future use)
+  // File reference methods
   async addFileRef(pageId, filename, options = {}) {
     const fileref = {
       id: nanoid(),
@@ -439,7 +468,7 @@ class Autonote extends ReadyResource {
     return await this.base.view.find('@autonote/filerefs', { pageId })
   }
 
-  // Writer management (same as autopass)
+  // Writer management
   async addWriter(key) {
     await this.base.append(dispatch('@autonote/add-writer', {
       key: b4a.isBuffer(key) ? key : b4a.from(key)
@@ -453,7 +482,7 @@ class Autonote extends ReadyResource {
     }))
   }
 
-  // Pairing methods (same as autopass)
+  // Pairing methods
   static pair(store, invite, opts) {
     return new AutonotePairer(store, invite, opts)
   }

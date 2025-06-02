@@ -12,64 +12,45 @@
   let tags = "";
   let starred = false;
   let isEditing = false;
+  let hasUnsavedChanges = false;
   let saveTimeout: ReturnType<typeof setTimeout>;
   let currentPageId = "";
-  let lastUpdatedAt = 0;
+  let lastKnownVersion = 0;
+  let showConflictDialog = false;
+  let conflictData = null;
 
-  // Reactive statement to update local state when page prop changes
-  $: if (
-    page &&
-    (page.id !== currentPageId || page.updatedAt > lastUpdatedAt)
-  ) {
-    // Only update if not currently editing or if it's a different page
-    if (!isEditing || page.id !== currentPageId) {
-      title = page.title;
-      content = page.content || "";
-      tags = page.tags.join(", ");
-      starred = page.starred || false;
-      currentPageId = page.id;
-      lastUpdatedAt = page.updatedAt;
-
-      // Stop editing when switching pages
-      if (page.id !== currentPageId) {
-        isEditing = false;
-      }
-    }
+  // Update local state when page prop changes
+  $: if (page && page.id !== currentPageId) {
+    loadPageContent();
   }
 
-  // Auto-save functionality
-  $: if (
-    isEditing &&
-    currentPageId &&
-    (title !== page.title ||
-      content !== page.content ||
-      tags !== page.tags.join(", ") ||
-      starred !== page.starred)
-  ) {
+  // Auto-save after 30 seconds of inactivity
+  $: if (hasUnsavedChanges && isEditing) {
     clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(savePage, 1000);
+    saveTimeout = setTimeout(() => {
+      if (hasUnsavedChanges) {
+        savePage();
+      }
+    }, 30000);
   }
 
-  async function savePage() {
-    if (!isEditing || !currentPageId) return;
+  function loadPageContent() {
+    if (!page) return;
 
-    const tagsArray = tags
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter((tag) => tag.length > 0);
+    title = page.title;
+    content = page.content || "";
+    tags = page.tags.join(", ");
+    starred = page.starred || false;
+    currentPageId = page.id;
+    lastKnownVersion = page.updatedAt;
+    hasUnsavedChanges = false;
+    isEditing = false;
+    clearTimeout(saveTimeout);
+  }
 
-    try {
-      await storeActions.updatePage(currentPageId, {
-        title: title.trim() || "Untitled",
-        content,
-        tags: tagsArray,
-        starred,
-      });
-
-      // Update our tracking
-      lastUpdatedAt = Date.now();
-    } catch (error) {
-      console.error("Failed to save page:", error);
+  function markDirty() {
+    if (!hasUnsavedChanges) {
+      hasUnsavedChanges = true;
     }
   }
 
@@ -79,7 +60,100 @@
 
   function stopEditing() {
     isEditing = false;
-    savePage();
+    if (hasUnsavedChanges) {
+      savePage();
+    }
+  }
+
+  async function savePage() {
+    if (!hasUnsavedChanges || !currentPageId) return;
+
+    try {
+      // Check for conflicts using the store action
+      const versionCheck = await storeActions.checkPageVersion(
+        currentPageId,
+        lastKnownVersion,
+      );
+
+      if (versionCheck.hasConflict && versionCheck.page) {
+        // Conflict detected
+        conflictData = {
+          current: versionCheck.page,
+          ours: {
+            title: title.trim() || "Untitled",
+            content,
+            tags: tags
+              .split(",")
+              .map((tag) => tag.trim())
+              .filter((tag) => tag.length > 0),
+            starred,
+          },
+        };
+        showConflictDialog = true;
+        return;
+      }
+
+      await saveWithoutConflictCheck();
+    } catch (error) {
+      console.error("Failed to save page:", error);
+    }
+  }
+
+  async function saveWithoutConflictCheck() {
+    const tagsArray = tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+
+    const updated = await storeActions.updatePage(
+      currentPageId,
+      {
+        title: title.trim() || "Untitled",
+        content,
+        tags: tagsArray,
+        starred,
+      },
+      lastKnownVersion,
+    );
+
+    hasUnsavedChanges = false;
+    lastKnownVersion = updated.updatedAt;
+    clearTimeout(saveTimeout);
+  }
+
+  async function resolveConflict(
+    resolution: "keep-ours" | "keep-theirs" | "merge",
+  ) {
+    if (!conflictData) return;
+
+    try {
+      if (resolution === "keep-theirs") {
+        // Discard our changes, load their version
+        title = conflictData.current.title;
+        content = conflictData.current.content || "";
+        tags = conflictData.current.tags.join(", ");
+        starred = conflictData.current.starred || false;
+        lastKnownVersion = conflictData.current.updatedAt;
+        hasUnsavedChanges = false;
+      } else if (resolution === "keep-ours") {
+        // Save our version, overwriting theirs
+        await saveWithoutConflictCheck();
+      } else if (resolution === "merge") {
+        // Simple merge strategy: append their changes as comments
+        const mergedContent =
+          content +
+          "\n\n--- PEER CHANGES ---\n" +
+          (conflictData.current.content || "");
+
+        content = mergedContent;
+        await saveWithoutConflictCheck();
+      }
+
+      showConflictDialog = false;
+      conflictData = null;
+    } catch (error) {
+      console.error("Failed to resolve conflict:", error);
+    }
   }
 
   async function deletePage() {
@@ -131,8 +205,8 @@
 
     content =
       content.substring(0, start) + replacement + content.substring(end);
+    markDirty();
 
-    // Restore focus and selection
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(
@@ -142,50 +216,46 @@
     }, 0);
   }
 
-  // Simple markdown renderer
   function renderMarkdown(text: any) {
     if (!text) return '<p class="placeholder">Start writing your note...</p>';
 
-    return (
-      text
-        // Headers
-        .replace(/^### (.*$)/gim, "<h3>$1</h3>")
-        .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-        .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-        // Bold
-        .replace(/\*\*(.*)\*\*/gim, "<strong>$1</strong>")
-        // Italic
-        .replace(/\*(.*)\*/gim, "<em>$1</em>")
-        // Code
-        .replace(/`(.*?)`/gim, "<code>$1</code>")
-        // Links
-        .replace(
-          /\[([^\]]+)\]\(([^)]+)\)/gim,
-          '<a href="$2" target="_blank">$1</a>',
-        )
-        // Line breaks
-        .replace(/\n/gim, "<br>")
-        // Quotes
-        .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
-        // Lists
-        .replace(/^\* (.*$)/gim, "<li>$1</li>")
-        .replace(/^- (.*$)/gim, "<li>$1</li>")
-        .replace(/^(\d+)\. (.*$)/gim, "<li>$2</li>")
-    );
+    return text
+      .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+      .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+      .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+      .replace(/\*\*(.*)\*\*/gim, "<strong>$1</strong>")
+      .replace(/\*(.*)\*/gim, "<em>$1</em>")
+      .replace(/`(.*?)`/gim, "<code>$1</code>")
+      .replace(
+        /\[([^\]]+)\]\(([^)]+)\)/gim,
+        '<a href="$2" target="_blank">$1</a>',
+      )
+      .replace(/\n/gim, "<br>")
+      .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
+      .replace(/^\* (.*$)/gim, "<li>$1</li>")
+      .replace(/^- (.*$)/gim, "<li>$1</li>")
+      .replace(/^(\d+)\. (.*$)/gim, "<li>$2</li>");
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.ctrlKey && event.key === "s") {
+      event.preventDefault();
+      savePage();
+    }
   }
 
   onMount(() => {
-    // Initialize from page prop
     if (page) {
-      title = page.title;
-      content = page.content || "";
-      tags = page.tags.join(", ");
-      starred = page.starred || false;
-      currentPageId = page.id;
-      lastUpdatedAt = page.updatedAt;
+      loadPageContent();
     }
+
+    return () => {
+      clearTimeout(saveTimeout);
+    };
   });
 </script>
+
+<svelte:window on:keydown={handleKeydown} />
 
 <div class="page-editor">
   <!-- Header -->
@@ -194,6 +264,7 @@
       <input
         type="text"
         bind:value={title}
+        on:input={markDirty}
         on:focus={startEditing}
         on:blur={stopEditing}
         class="title-input"
@@ -204,15 +275,24 @@
         class:starred
         on:click={() => {
           starred = !starred;
+          markDirty();
           startEditing();
         }}
         title={starred ? "Remove from favorites" : "Add to favorites"}
       >
-        {starred ? "*" : " "}
+        {starred ? "STAR" : "UNSTAR"}
       </button>
     </div>
 
     <div class="header-actions">
+      <button
+        class="btn-primary"
+        on:click={savePage}
+        disabled={!hasUnsavedChanges}
+        title="Save (Ctrl+S)"
+      >
+        {hasUnsavedChanges ? "Save*" : "Saved"}
+      </button>
       <button class="btn-secondary" on:click={deletePage} title="Delete page">
         Delete
       </button>
@@ -224,6 +304,7 @@
     <input
       type="text"
       bind:value={tags}
+      on:input={markDirty}
       on:focus={startEditing}
       on:blur={stopEditing}
       class="tags-input"
@@ -240,9 +321,7 @@
       <button on:click={() => formatText("italic")} title="Italic">
         <em>I</em>
       </button>
-      <button on:click={() => formatText("code")} title="Code">
-        &lt;/&gt;
-      </button>
+      <button on:click={() => formatText("code")} title="Code"> Code </button>
     </div>
 
     <div class="toolbar-group">
@@ -262,10 +341,10 @@
         List
       </button>
       <button on:click={() => formatText("number")} title="Numbered List">
-        1. List
+        Numbered
       </button>
       <button on:click={() => formatText("quote")} title="Quote">
-        " Quote
+        Quote
       </button>
     </div>
   </div>
@@ -276,6 +355,7 @@
       <textarea
         id="content-editor"
         bind:value={content}
+        on:input={markDirty}
         on:focus={startEditing}
         on:blur={stopEditing}
         placeholder="Start writing your note..."
@@ -295,13 +375,68 @@
     <span class="last-modified">
       Last modified: {new Date(page.updatedAt).toLocaleString()}
     </span>
-    {#if isEditing}
-      <span class="save-status">Saving...</span>
-    {:else if currentPageId !== page.id}
-      <span class="sync-status">Loading...</span>
-    {/if}
+    <div class="status-indicators">
+      {#if hasUnsavedChanges}
+        <span class="unsaved-status">Unsaved changes</span>
+      {/if}
+      {#if isEditing}
+        <span class="editing-status">Editing</span>
+      {/if}
+    </div>
   </div>
 </div>
+
+<!-- Conflict Resolution Dialog -->
+{#if showConflictDialog && conflictData}
+  <div class="modal-backdrop">
+    <div class="conflict-modal">
+      <div class="modal-header">
+        <h2>Merge Conflict</h2>
+        <p>This page was modified by another user while you were editing.</p>
+      </div>
+
+      <div class="conflict-content">
+        <div class="conflict-section">
+          <h4>Your Version:</h4>
+          <div class="conflict-preview">
+            <strong>Title:</strong>
+            {conflictData.ours.title}<br />
+            <strong>Content:</strong>
+            {conflictData.ours.content.substring(0, 200)}...
+          </div>
+        </div>
+
+        <div class="conflict-section">
+          <h4>Their Version:</h4>
+          <div class="conflict-preview">
+            <strong>Title:</strong>
+            {conflictData.current.title}<br />
+            <strong>Content:</strong>
+            {conflictData.current.content?.substring(0, 200) || ""}...
+          </div>
+        </div>
+      </div>
+
+      <div class="conflict-actions">
+        <button
+          class="btn-secondary"
+          on:click={() => resolveConflict("keep-theirs")}
+        >
+          Use Their Version
+        </button>
+        <button class="btn-secondary" on:click={() => resolveConflict("merge")}>
+          Merge Both
+        </button>
+        <button
+          class="btn-primary"
+          on:click={() => resolveConflict("keep-ours")}
+        >
+          Keep My Version
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .page-editor {
@@ -344,7 +479,7 @@
   .star-btn {
     background: none;
     border: none;
-    font-size: 1.25rem;
+    font-size: 0.75rem;
     cursor: pointer;
     padding: 0.25rem;
     border-radius: 4px;
@@ -362,6 +497,26 @@
   .header-actions {
     display: flex;
     gap: 0.5rem;
+  }
+
+  .btn-primary {
+    background: #4a90e2;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background-color 0.2s;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #357abd;
+  }
+
+  .btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
   }
 
   .btn-secondary {
@@ -517,12 +672,83 @@
     color: #6c757d;
   }
 
-  .save-status {
+  .status-indicators {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .unsaved-status {
+    color: #dc3545;
+    font-weight: 500;
+  }
+
+  .editing-status {
     color: #28a745;
   }
 
-  .sync-status {
-    color: #007bff;
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .conflict-modal {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow: auto;
+  }
+
+  .modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .modal-header h2 {
+    margin: 0 0 0.5rem 0;
+    color: #dc3545;
+  }
+
+  .modal-header p {
+    margin: 0;
+    color: #666;
+  }
+
+  .conflict-content {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .conflict-section h4 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+  }
+
+  .conflict-preview {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    border: 1px solid #e0e0e0;
+  }
+
+  .conflict-actions {
+    padding: 1.5rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    border-top: 1px solid #e0e0e0;
   }
 </style>
 

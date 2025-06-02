@@ -43,6 +43,7 @@
 
   async function selectPage(page: Page) {
     await storeActions.loadPage(page.id);
+    currentPage.set(page);
   }
 
   function selectGroup(groupId: string | null) {
