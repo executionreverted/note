@@ -13,6 +13,7 @@
   let starred = page.starred || false;
   let isEditing = false;
   let saveTimeout: ReturnType<typeof setTimeout>;
+  let currentPageId = page.id; // Track current page ID
 
   // Auto-save functionality
   $: if (
@@ -24,6 +25,16 @@
   ) {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(savePage, 1000); // Auto-save after 1 second of inactivity
+  }
+
+  // Only reset values when page ID changes (new page selected)
+  $: if (page.id !== currentPageId) {
+    currentPageId = page.id;
+    title = page.title;
+    content = page.content || "";
+    tags = page.tags.join(", ");
+    starred = page.starred || false;
+    isEditing = false;
   }
 
   async function savePage() {
@@ -149,21 +160,13 @@
   }
 
   onMount(() => {
-    // Set initial values when page changes
+    // Initialize values
+    currentPageId = page.id;
     title = page.title;
     content = page.content || "";
     tags = page.tags.join(", ");
     starred = page.starred || false;
   });
-
-  // Update when page prop changes
-  $: if (page) {
-    title = page.title;
-    content = page.content || "";
-    tags = page.tags.join(", ");
-    starred = page.starred || false;
-    isEditing = false;
-  }
 </script>
 
 <div class="page-editor">
@@ -498,3 +501,4 @@
     color: #28a745;
   }
 </style>
+
