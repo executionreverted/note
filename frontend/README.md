@@ -1,7 +1,37 @@
-# Tauri + SvelteKit + TypeScript
+# Svelte-TypeScript-Esbuild-Electron template
 
-This template should help get you started developing with Tauri, SvelteKit and TypeScript in Vite.
+A starter kit to build cross-platform desktop apps with [Electron](https://www.electronjs.org/), [Svelte](https://svelte.dev/), [TypeScript](https://www.typescriptlang.org/) and [Esbuild](https://esbuild.github.io/) :
 
-## Recommended IDE Setup
+- Windows (portable executable)
+- Linux (AppImage)
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
+## Install
+
+```bash
+git clone https://github.com/Tazeg/electron-svelte-typescript-esbuild-template.git
+cd electron-svelte-typescript-esbuild-template/svelte
+yarn install # or npm
+cd ../electron
+yarn install
+```
+
+## Developpement
+
+```bash
+cd electron-typescript-svelte-esbuild-template/svelte
+yarn run dev
+yarn run check
+yarn run lint
+```
+
+The Hot Module Replacement (HMR) feature will reload the browser while you are coding (thanks to [electron-reloader](https://github.com/sindresorhus/electron-reloader))
+
+## Build for production
+
+```bash
+cd electron-typescript-svelte-esbuild-template/svelte
+yarn run buildlinux
+yarn run buildwindows
+```
+
+The desktop portable apps are built in the `dist/` directory.
