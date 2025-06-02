@@ -10,21 +10,10 @@
 
   let name = group?.name || "";
   let color = group?.color || "#4a90e2";
-  let icon = group?.icon || "📁";
+  let icon = group?.icon || "";
   let isLoading = false;
 
-  const iconOptions = [
-    "📁",
-    "📋",
-    "💼",
-    "🎯",
-    "📚",
-    "🏠",
-    "⚡",
-    "🎨",
-    "🔧",
-    "📊",
-  ];
+  const iconOptions = ["", "", "", "", "", "", "", "", "", ""];
   const colorOptions = [
     "#4a90e2",
     "#28a745",
@@ -48,7 +37,10 @@
           icon,
         });
       } else {
-        await storeActions.createGroup(name.trim(), parentId, { color, icon });
+        await storeActions.createGroup(name.trim(), parentId as any, {
+          color,
+          icon,
+        });
       }
       dispatch("close");
     } catch (error) {
@@ -59,7 +51,7 @@
     }
   }
 
-  function handleKeydown(event) {
+  function handleKeydown(event: any) {
     if (event.key === "Escape") {
       dispatch("close");
     }
@@ -68,8 +60,12 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div class="modal-backdrop" on:click={() => dispatch("close")}>
-  <div class="modal" on:click|stopPropagation>
+<div
+  class="modal-backdrop"
+  on:keydown|stopPropagation
+  on:click={() => dispatch("close")}
+>
+  <div class="modal" on:keydown|stopPropagation on:click|stopPropagation>
     <div class="modal-header">
       <h2>{group ? "Edit Group" : "Create Group"}</h2>
       <button class="close-btn" on:click={() => dispatch("close")}>×</button>
@@ -88,7 +84,7 @@
       </div>
 
       <div class="form-group">
-        <label>Icon</label>
+        <p>Icon</p>
         <div class="icon-grid">
           {#each iconOptions as iconOption}
             <button
@@ -104,7 +100,7 @@
       </div>
 
       <div class="form-group">
-        <label>Color</label>
+        <p>Color</p>
         <div class="color-grid">
           {#each colorOptions as colorOption}
             <button

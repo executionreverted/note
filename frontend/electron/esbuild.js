@@ -24,11 +24,20 @@ const options = {
   entryPoints: [
     'index.ts',
   ],
-  external: ['electron', "fsevents"],
+  external: ['electron', "fsevents", "sodium-native", "corestore", "hypercore", 'rocksdb-native',
+    'leveldown',
+    'sodium-native',
+    'utp-native',
+    'udx-native',
+    'crypto',
+    'node:crypto',
+    '../../backend/src/main.js'
+  ],
   outdir: '.',
   bundle: true,
   platform: 'node',
-  target: 'es6',
+  target: 'node16',
+  format: "cjs",
   minify: production,
   pure: production ? ['console.log', 'console.time', 'console.timeEnd'] : [], // remove console.*
   sourcemap: false,

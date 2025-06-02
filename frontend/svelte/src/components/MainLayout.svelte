@@ -12,6 +12,7 @@
     profile,
     storeActions,
   } from "../lib/stores";
+
   import PageEditor from "./PageEditor.svelte";
   import ProfileModal from "./ProfileModal.svelte";
   import GroupModal from "./GroupModal.svelte";
@@ -81,7 +82,11 @@
   <div class="sidebar" style="width: {sidebarWidth}px">
     <!-- Profile Section -->
     <div class="profile-section">
-      <div class="profile-info" on:click={() => (showProfileModal = true)}>
+      <div
+        class="profile-info"
+        on:keydown|stopPropagation
+        on:click={() => (showProfileModal = true)}
+      >
         <div class="avatar">
           {$profile?.displayName?.charAt(0) || "?"}
         </div>
@@ -92,7 +97,7 @@
         on:click={() => (showInviteModal = true)}
         title="Share Vault"
       >
-        📤
+        share
       </button>
     </div>
 
@@ -110,7 +115,7 @@
         on:click={() => showStarredOnly.set(!$showStarredOnly)}
         title="Show starred only"
       >
-        ⭐
+        fav
       </button>
     </div>
 
@@ -118,11 +123,12 @@
     <div class="nav-section">
       <!-- All Pages -->
       <div
+        on:keydown|stopPropagation
         class="nav-item"
         class:active={$selectedGroupId === null}
         on:click={() => selectGroup(null)}
       >
-        <span class="nav-icon">📄</span>
+        <span class="nav-icon">doc</span>
         <span class="nav-label">All Pages</span>
         <span class="nav-count">{$pages.length}</span>
       </div>
@@ -135,18 +141,19 @@
           on:click={() => createGroup()}
           title="Create Group"
         >
-          ➕
+          create
         </button>
       </div>
 
       {#each $groupsTree as group (group.id)}
         <div class="group-tree">
           <div
+            on:keydown|stopPropagation
             class="nav-item group-item"
             class:active={$selectedGroupId === group.id}
             on:click={() => selectGroup(group.id)}
           >
-            <span class="nav-icon">📁</span>
+            <span class="nav-icon">group</span>
             <span class="nav-label">{group.name}</span>
             <span class="nav-count"
               >{$pages.filter((p) => p.groupId === group.id).length}</span
@@ -155,15 +162,16 @@
               <button
                 class="btn-icon"
                 on:click|stopPropagation={() => createGroup(group.id)}
-                >➕</button
+                >create</button
               >
               <button
                 class="btn-icon"
-                on:click|stopPropagation={() => editGroup(group)}>✏️</button
+                on:click|stopPropagation={() => editGroup(group)}>edit</button
               >
               <button
                 class="btn-icon"
-                on:click|stopPropagation={() => deleteGroup(group)}>🗑️</button
+                on:click|stopPropagation={() => deleteGroup(group)}
+                >delete</button
               >
             </div>
           </div>
@@ -172,11 +180,12 @@
             <div class="subgroups">
               {#each group.children as subgroup (subgroup.id)}
                 <div
+                  on:keydown|stopPropagation
                   class="nav-item subgroup-item"
                   class:active={$selectedGroupId === subgroup.id}
                   on:click={() => selectGroup(subgroup.id)}
                 >
-                  <span class="nav-icon">📁</span>
+                  <span class="nav-icon">group</span>
                   <span class="nav-label">{subgroup.name}</span>
                   <span class="nav-count"
                     >{$pages.filter((p) => p.groupId === subgroup.id)
@@ -186,12 +195,12 @@
                     <button
                       class="btn-icon"
                       on:click|stopPropagation={() => editGroup(subgroup)}
-                      >✏️</button
+                      >edit</button
                     >
                     <button
                       class="btn-icon"
                       on:click|stopPropagation={() => deleteGroup(subgroup)}
-                      >🗑️</button
+                      >delete</button
                     >
                   </div>
                 </div>
@@ -207,26 +216,27 @@
       <div class="pages-header">
         <span>Pages</span>
         <button class="btn-icon" on:click={createPage} title="Create Page">
-          ➕
+          +
         </button>
       </div>
 
       <div class="pages-list">
         {#each $filteredPages as page (page.id)}
           <div
+            on:keydown|stopPropagation
             class="page-item"
             class:active={$currentPage?.id === page.id}
             on:click={() => selectPage(page)}
           >
             <div class="page-info">
               <div class="page-title">
-                {#if page.starred}⭐{/if}
+                {#if page.starred}fav{/if}
                 {page.title}
               </div>
               <div class="page-meta">
                 {new Date(page.updatedAt).toLocaleDateString()}
                 {#if page.tags.length > 0}
-                  • {page.tags.join(", ")}
+                  {page.tags.join(", ")}
                 {/if}
               </div>
             </div>
@@ -235,7 +245,7 @@
               on:click|stopPropagation={() => deletePage(page)}
               title="Delete page"
             >
-              🗑️
+              delete
             </button>
           </div>
         {/each}
@@ -587,4 +597,3 @@
     background-color: #357abd;
   }
 </style>
-

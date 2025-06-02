@@ -10,7 +10,10 @@ const z32 = require('z32')
 const b4a = require('b4a')
 const { Router, dispatch } = require('./spec/hyperdispatch')
 const db = require('./spec/db/index.js') // Uncomment after running schema builder
-const { nanoid } = require('nanoid')
+const crypto = require('crypto')
+function nanoid() {
+  return crypto.randomBytes(16).toString('hex')
+}
 
 class AutonotePairer extends ReadyResource {
   constructor(store, invite, opts = {}) {

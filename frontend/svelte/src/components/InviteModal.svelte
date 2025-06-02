@@ -46,7 +46,7 @@
     }
   }
 
-  function handleKeydown(event) {
+  function handleKeydown(event: any) {
     if (event.key === "Escape") {
       dispatch("close");
     }
@@ -58,11 +58,15 @@
 
 <svelte:window on:keydown={handleKeydown} />
 
-<div class="modal-backdrop" on:click={() => dispatch("close")}>
-  <div class="modal" on:click|stopPropagation>
+<div
+  class="modal-backdrop"
+  on:keydown|stopPropagation
+  on:click={() => dispatch("close")}
+>
+  <div class="modal" on:click|stopPropagation on:keydown|stopPropagation>
     <div class="modal-header">
       <h2>Share Vault</h2>
-      <button class="close-btn" on:click={() => dispatch("close")}>×</button>
+      <button class="close-btn" on:click={() => dispatch("close")}>x</button>
     </div>
 
     <div class="modal-content">
@@ -80,16 +84,16 @@
           <div class="invite-code">
             <input type="text" value={inviteCode} readonly />
             <button class="copy-btn" on:click={copyToClipboard}>
-              {copied ? "✓" : "📋"}
+              {copied ? "Y" : "N"}
             </button>
           </div>
 
           <div class="invite-actions">
             <button class="btn-secondary" on:click={generateInvite}>
-              🔄 Generate New
+              Generate New
             </button>
             <button class="btn-danger" on:click={deleteInvite}>
-              🗑️ Delete Invite
+              Delete Invite
             </button>
           </div>
         </div>
@@ -104,7 +108,7 @@
           </ol>
 
           <div class="warning">
-            <strong>⚠️ Security Note:</strong> Anyone with this invite code can access
+            <strong>! Security Note:</strong> Anyone with this invite code can access
             your vault. Only share it with trusted people.
           </div>
         </div>

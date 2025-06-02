@@ -2,7 +2,7 @@ const esbuild = require('esbuild')
 const sveltePreprocess = require('svelte-preprocess')
 const sveltePlugin = require('esbuild-svelte') // esbuild plugin svelte
 
-function showUsage () {
+function showUsage() {
   console.log('USAGE')
   console.log('node esbuild.js dev')
   console.log('node esbuild.js watch')
@@ -25,7 +25,7 @@ const production = (process.argv[2] === 'prod')
 let watch = false
 if (process.argv[2] === 'watch') {
   watch = {
-    onRebuild (error) {
+    onRebuild(error) {
       if (error) console.error('esbuild: Watch build failed:', error.getMessage())
       else console.log('esbuild: Watch build succeeded')
     }
@@ -35,6 +35,7 @@ if (process.argv[2] === 'watch') {
 // esbuild build options
 // see: https://esbuild.github.io/api/#build-api
 const options = {
+  charset: "utf8",
   entryPoints: ['./src/main.ts'],
   bundle: true,
   watch,

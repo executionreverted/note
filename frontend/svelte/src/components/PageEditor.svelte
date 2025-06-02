@@ -1,120 +1,167 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte'
-  import { storeActions } from '../stores'
-  import type { Page } from '../lib/ipc'
+  import { onMount, createEventDispatcher } from "svelte";
+  import { storeActions } from "../lib/stores";
+  import type { Page } from "../lib/ipc";
 
-  export let page: Page
+  export let page: Page;
 
-  const dispatch = createEventDispatcher()
+  const dispatch = createEventDispatcher();
 
-  let title = page.title
-  let content = page.content || ''
-  let tags = page.tags.join(', ')
-  let starred = page.starred || false
-  let isEditing = false
-  let saveTimeout: ReturnType<typeof setTimeout>
+  let title = page.title;
+  let content = page.content || "";
+  let tags = page.tags.join(", ");
+  let starred = page.starred || false;
+  let isEditing = false;
+  let saveTimeout: ReturnType<typeof setTimeout>;
 
   // Auto-save functionality
-  $: if (isEditing && (title !== page.title || content !== page.content || tags !== page.tags.join(', ') || starred !== page.starred)) {
-    clearTimeout(saveTimeout)
-    saveTimeout = setTimeout(savePage, 1000) // Auto-save after 1 second of inactivity
+  $: if (
+    isEditing &&
+    (title !== page.title ||
+      content !== page.content ||
+      tags !== page.tags.join(", ") ||
+      starred !== page.starred)
+  ) {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(savePage, 1000); // Auto-save after 1 second of inactivity
   }
 
   async function savePage() {
-    if (!isEditing) return
+    if (!isEditing) return;
 
-    const tagsArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-    
+    const tagsArray = tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+
     try {
       await storeActions.updatePage(page.id, {
-        title: title.trim() || 'Untitled',
+        title: title.trim() || "Untitled",
         content,
         tags: tagsArray,
-        starred
-      })
+        starred,
+      });
     } catch (error) {
-      console.error('Failed to save page:', error)
+      console.error("Failed to save page:", error);
     }
   }
 
   function startEditing() {
-    isEditing = true
+    isEditing = true;
   }
 
   function stopEditing() {
-    isEditing = false
-    savePage()
+    isEditing = false;
+    savePage();
   }
 
   async function deletePage() {
     if (confirm(`Delete "${page.title}"?`)) {
-      await storeActions.deletePage(page.id)
+      await storeActions.deletePage(page.id);
     }
   }
 
   function formatText(format: string) {
-    const textarea = document.getElementById('content-editor') as HTMLTextAreaElement
-    if (!textarea) return
+    const textarea = document.getElementById(
+      "content-editor",
+    ) as HTMLTextAreaElement;
+    if (!textarea) return;
 
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const selectedText = content.substring(start, end)
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.substring(start, end);
 
-    let replacement = ''
+    let replacement = "";
     switch (format) {
-      case 'bold':
-        replacement = `**${selectedText}**`
-        break
-      case 'italic':
-        replacement = `*${selectedText}*`
-        break
-      case 'code':
-        replacement = `\`${selectedText}\``
-        break
-      case 'header1':
-        replacement = `# ${selectedText}`
-        break
-      case 'header2':
-        replacement = `## ${selectedText}`
-        break
-      case 'header3':
-        replacement = `### ${selectedText}`
-        break
-      case 'bullet':
-        replacement = `- ${selectedText}`
-        break
-      case 'number':
-        replacement = `1. ${selectedText}`
-        break
-      case 'quote':
-        replacement = `> ${selectedText}`
-        break
+      case "bold":
+        replacement = `**${selectedText}**`;
+        break;
+      case "italic":
+        replacement = `*${selectedText}*`;
+        break;
+      case "code":
+        replacement = `\`${selectedText}\``;
+        break;
+      case "header1":
+        replacement = `# ${selectedText}`;
+        break;
+      case "header2":
+        replacement = `## ${selectedText}`;
+        break;
+      case "header3":
+        replacement = `### ${selectedText}`;
+        break;
+      case "bullet":
+        replacement = `- ${selectedText}`;
+        break;
+      case "number":
+        replacement = `1. ${selectedText}`;
+        break;
+      case "quote":
+        replacement = `> ${selectedText}`;
+        break;
     }
 
-    content = content.substring(0, start) + replacement + content.substring(end)
-    
+    content =
+      content.substring(0, start) + replacement + content.substring(end);
+
     // Restore focus and selection
     setTimeout(() => {
-      textarea.focus()
-      textarea.setSelectionRange(start + replacement.length, start + replacement.length)
-    }, 0)
+      textarea.focus();
+      textarea.setSelectionRange(
+        start + replacement.length,
+        start + replacement.length,
+      );
+    }, 0);
+  }
+
+  // Simple markdown renderer (you might want to use a proper markdown library)
+  function renderMarkdown(text: any) {
+    if (!text) return '<p class="placeholder">Start writing your note...</p>';
+
+    return (
+      text
+        // Headers
+        .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+        .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+        .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+        // Bold
+        .replace(/\*\*(.*)\*\*/gim, "<strong>$1</strong>")
+        // Italic
+        .replace(/\*(.*)\*/gim, "<em>$1</em>")
+        // Code
+        .replace(/`(.*?)`/gim, "<code>$1</code>")
+        // Links
+        .replace(
+          /\[([^\]]+)\]\(([^)]+)\)/gim,
+          '<a href="$2" target="_blank">$1</a>',
+        )
+        // Line breaks
+        .replace(/\n/gim, "<br>")
+        // Quotes
+        .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
+        // Lists
+        .replace(/^\* (.*$)/gim, "<li>$1</li>")
+        .replace(/^- (.*$)/gim, "<li>$1</li>")
+        .replace(/^(\d+)\. (.*$)/gim, "<li>$2</li>")
+    );
   }
 
   onMount(() => {
     // Set initial values when page changes
-    title = page.title
-    content = page.content || ''
-    tags = page.tags.join(', ')
-    starred = page.starred || false
-  })
+    title = page.title;
+    content = page.content || "";
+    tags = page.tags.join(", ");
+    starred = page.starred || false;
+  });
 
   // Update when page prop changes
   $: if (page) {
-    title = page.title
-    content = page.content || ''
-    tags = page.tags.join(', ')
-    starred = page.starred || false
-    isEditing = false
+    title = page.title;
+    content = page.content || "";
+    tags = page.tags.join(", ");
+    starred = page.starred || false;
+    isEditing = false;
   }
 </script>
 
@@ -130,19 +177,22 @@
         class="title-input"
         placeholder="Page title..."
       />
-      <button 
-        class="star-btn" 
-        class:starred 
-        on:click={() => { starred = !starred; startEditing(); }}
-        title={starred ? 'Remove from favorites' : 'Add to favorites'}
+      <button
+        class="star-btn"
+        class:starred
+        on:click={() => {
+          starred = !starred;
+          startEditing();
+        }}
+        title={starred ? "Remove from favorites" : "Add to favorites"}
       >
-        {starred ? '⭐' : '☆'}
+        {starred ? "*" : " "}
       </button>
     </div>
 
     <div class="header-actions">
       <button class="btn-secondary" on:click={deletePage} title="Delete page">
-        🗑️ Delete
+        Delete
       </button>
     </div>
   </div>
@@ -162,37 +212,37 @@
   <!-- Toolbar -->
   <div class="toolbar">
     <div class="toolbar-group">
-      <button on:click={() => formatText('bold')} title="Bold">
+      <button on:click={() => formatText("bold")} title="Bold">
         <strong>B</strong>
       </button>
-      <button on:click={() => formatText('italic')} title="Italic">
+      <button on:click={() => formatText("italic")} title="Italic">
         <em>I</em>
       </button>
-      <button on:click={() => formatText('code')} title="Code">
+      <button on:click={() => formatText("code")} title="Code">
         &lt;/&gt;
       </button>
     </div>
 
     <div class="toolbar-group">
-      <button on:click={() => formatText('header1')} title="Header 1">
+      <button on:click={() => formatText("header1")} title="Header 1">
         H1
       </button>
-      <button on:click={() => formatText('header2')} title="Header 2">
+      <button on:click={() => formatText("header2")} title="Header 2">
         H2
       </button>
-      <button on:click={() => formatText('header3')} title="Header 3">
+      <button on:click={() => formatText("header3")} title="Header 3">
         H3
       </button>
     </div>
 
     <div class="toolbar-group">
-      <button on:click={() => formatText('bullet')} title="Bullet List">
-        • List
+      <button on:click={() => formatText("bullet")} title="Bullet List">
+        List
       </button>
-      <button on:click={() => formatText('number')} title="Numbered List">
+      <button on:click={() => formatText("number")} title="Numbered List">
         1. List
       </button>
-      <button on:click={() => formatText('quote')} title="Quote">
+      <button on:click={() => formatText("quote")} title="Quote">
         " Quote
       </button>
     </div>
@@ -228,35 +278,6 @@
     {/if}
   </div>
 </div>
-
-<script>
-  // Simple markdown renderer (you might want to use a proper markdown library)
-  function renderMarkdown(text) {
-    if (!text) return '<p class="placeholder">Start writing your note...</p>'
-    
-    return text
-      // Headers
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-      // Bold
-      .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-      // Italic
-      .replace(/\*(.*)\*/gim, '<em>$1</em>')
-      // Code
-      .replace(/`(.*?)`/gim, '<code>$1</code>')
-      // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/gim, '<a href="$2" target="_blank">$1</a>')
-      // Line breaks
-      .replace(/\n/gim, '<br>')
-      // Quotes
-      .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
-      // Lists
-      .replace(/^\* (.*$)/gim, '<li>$1</li>')
-      .replace(/^- (.*$)/gim, '<li>$1</li>')
-      .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
-  }
-</script>
 
 <style>
   .page-editor {
@@ -398,7 +419,7 @@
     border: none;
     outline: none;
     padding: 1rem;
-    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-family: "Menlo", "Monaco", "Courier New", monospace;
     font-size: 0.875rem;
     line-height: 1.6;
     resize: none;
@@ -439,7 +460,7 @@
     background: #f8f9fa;
     padding: 0.125rem 0.25rem;
     border-radius: 3px;
-    font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-family: "Menlo", "Monaco", "Courier New", monospace;
     font-size: 0.8rem;
   }
 

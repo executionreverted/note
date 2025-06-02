@@ -46,6 +46,7 @@
 
   function selectPath() {
     // This would open a directory dialog - we'll implement in the main process
+    // @ts-ignore
     ipc.invoke("dialog:selectDirectory").then((path: any) => {
       if (path) newVaultPath = path;
     });
@@ -60,17 +61,17 @@
 
   <div class="vault-list">
     {#each vaults as vault (vault.path)}
-      <div class="vault-item" on:click={() => openVault(vault)}>
+      <div
+        class="vault-item"
+        on:keypress={() => openVault(vault)}
+        on:click={() => openVault(vault)}
+      >
         <div class="vault-info">
           <h3>{vault.name}</h3>
           <p>{vault.path}</p>
-          <small
-            >Last accessed: {new Date(
-              vault.lastAccessed,
-            ).toLocaleDateString()}</small
-          >
+          <small>{new Date(vault.lastAccessed).toLocaleDateString()}</small>
         </div>
-        <div class="vault-arrow">→</div>
+        <div class="vault-arrow"></div>
       </div>
     {/each}
 
@@ -96,8 +97,12 @@
 </div>
 
 {#if showCreateModal}
-  <div class="modal-backdrop" on:click={() => (showCreateModal = false)}>
-    <div class="modal" on:click|stopPropagation>
+  <div
+    class="modal-backdrop"
+    on:keypress={() => (showCreateModal = false)}
+    on:click={() => (showCreateModal = false)}
+  >
+    <div class="modal" on:keypress|stopPropagation on:click|stopPropagation>
       <h2>Create New Vault</h2>
 
       <div class="form-group">
