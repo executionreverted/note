@@ -7,38 +7,51 @@
 
   const dispatch = createEventDispatcher();
 
-  let title = page.title;
-  let content = page.content || "";
-  let tags = page.tags.join(", ");
-  let starred = page.starred || false;
+  let title = "";
+  let content = "";
+  let tags = "";
+  let starred = false;
   let isEditing = false;
   let saveTimeout: ReturnType<typeof setTimeout>;
-  let currentPageId = page.id; // Track current page ID
+  let currentPageId = "";
+  let lastUpdatedAt = 0;
+
+  // Reactive statement to update local state when page prop changes
+  $: if (
+    page &&
+    (page.id !== currentPageId || page.updatedAt > lastUpdatedAt)
+  ) {
+    // Only update if not currently editing or if it's a different page
+    if (!isEditing || page.id !== currentPageId) {
+      title = page.title;
+      content = page.content || "";
+      tags = page.tags.join(", ");
+      starred = page.starred || false;
+      currentPageId = page.id;
+      lastUpdatedAt = page.updatedAt;
+
+      // Stop editing when switching pages
+      if (page.id !== currentPageId) {
+        isEditing = false;
+      }
+    }
+  }
 
   // Auto-save functionality
   $: if (
     isEditing &&
+    currentPageId &&
     (title !== page.title ||
       content !== page.content ||
       tags !== page.tags.join(", ") ||
       starred !== page.starred)
   ) {
     clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(savePage, 1000); // Auto-save after 1 second of inactivity
-  }
-
-  // Only reset values when page ID changes (new page selected)
-  $: if (page.id !== currentPageId) {
-    currentPageId = page.id;
-    title = page.title;
-    content = page.content || "";
-    tags = page.tags.join(", ");
-    starred = page.starred || false;
-    isEditing = false;
+    saveTimeout = setTimeout(savePage, 1000);
   }
 
   async function savePage() {
-    if (!isEditing) return;
+    if (!isEditing || !currentPageId) return;
 
     const tagsArray = tags
       .split(",")
@@ -46,12 +59,15 @@
       .filter((tag) => tag.length > 0);
 
     try {
-      await storeActions.updatePage(page.id, {
+      await storeActions.updatePage(currentPageId, {
         title: title.trim() || "Untitled",
         content,
         tags: tagsArray,
         starred,
       });
+
+      // Update our tracking
+      lastUpdatedAt = Date.now();
     } catch (error) {
       console.error("Failed to save page:", error);
     }
@@ -59,7 +75,6 @@
 
   function startEditing() {
     isEditing = true;
-    console.log("Start edit");
   }
 
   function stopEditing() {
@@ -127,7 +142,7 @@
     }, 0);
   }
 
-  // Simple markdown renderer (you might want to use a proper markdown library)
+  // Simple markdown renderer
   function renderMarkdown(text: any) {
     if (!text) return '<p class="placeholder">Start writing your note...</p>';
 
@@ -160,12 +175,15 @@
   }
 
   onMount(() => {
-    // Initialize values
-    currentPageId = page.id;
-    title = page.title;
-    content = page.content || "";
-    tags = page.tags.join(", ");
-    starred = page.starred || false;
+    // Initialize from page prop
+    if (page) {
+      title = page.title;
+      content = page.content || "";
+      tags = page.tags.join(", ");
+      starred = page.starred || false;
+      currentPageId = page.id;
+      lastUpdatedAt = page.updatedAt;
+    }
   });
 </script>
 
@@ -279,6 +297,8 @@
     </span>
     {#if isEditing}
       <span class="save-status">Saving...</span>
+    {:else if currentPageId !== page.id}
+      <span class="sync-status">Loading...</span>
     {/if}
   </div>
 </div>
@@ -499,6 +519,10 @@
 
   .save-status {
     color: #28a745;
+  }
+
+  .sync-status {
+    color: #007bff;
   }
 </style>
 

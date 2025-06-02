@@ -44,12 +44,11 @@ class IpcBridge {
     // Handle both electron contexts
     this.electronAPI = (window as any).electronAPI || (window as any).require?.('electron')?.ipcRenderer
 
-    if (this.electronAPI) {
-      if (this.electronAPI.on) {
-        this.electronAPI.on('vault-event', (event: any, data: any) => {
-          this.emit(data.type, data.payload)
-        })
-      }
+    if (this.electronAPI?.on) {
+      this.electronAPI.on('vault-event', (event: any, data: any) => {
+        console.log('🔄 IPC Event received:', data.type, data.payload)
+        this.emit(data.type, data.payload)
+      })
     }
   }
 
@@ -59,20 +58,36 @@ class IpcBridge {
       this.listeners.set(event, [])
     }
     this.listeners.get(event)!.push(callback)
+    console.log(`📡 Listener registered for: ${event}`)
   }
 
   off(event: string, callback: Function) {
     const callbacks = this.listeners.get(event)
     if (callbacks) {
       const index = callbacks.indexOf(callback)
-      if (index > -1) callbacks.splice(index, 1)
+      if (index > -1) {
+        callbacks.splice(index, 1)
+        console.log(`📡 Listener removed for: ${event}`)
+      }
     }
+  }
+
+  removeAllListeners(event: string) {
+    this.listeners.delete(event)
+    console.log(`📡 All listeners removed for: ${event}`)
   }
 
   private emit(event: string, data: any) {
     const callbacks = this.listeners.get(event)
+    console.log(`📡 Emitting "${event}" to ${callbacks?.length || 0} listeners`)
     if (callbacks) {
-      callbacks.forEach(cb => cb(data))
+      callbacks.forEach(cb => {
+        try {
+          cb(data)
+        } catch (error) {
+          console.error(`Error in event listener for ${event}:`, error)
+        }
+      })
     }
   }
 

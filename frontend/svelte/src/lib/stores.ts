@@ -32,6 +32,7 @@ export const lastSyncTime = writable<number>(Date.now())
 export const toasts = writable<Array<{ id: string, message: string, type: 'info' | 'success' | 'warning' | 'error' }>>([])
 
 let toastId = 0
+let currentPageId: string | null = null
 
 export function showToast(message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') {
   const id = `toast-${++toastId}`
@@ -42,6 +43,11 @@ export function showToast(message: string, type: 'info' | 'success' | 'warning' 
     toasts.update(items => items.filter(item => item.id !== id))
   }, 4000)
 }
+
+// Track current page ID
+currentPage.subscribe(page => {
+  currentPageId = page?.id || null
+})
 
 // Derived stores
 export const filteredPages = derived(
@@ -105,8 +111,6 @@ export const storeActions = {
       currentVault.set(vault)
       isVaultOpen.set(true)
       await this.loadVaultData()
-
-      // Set up real-time sync listener
       this.setupRealTimeSync()
     } finally {
       isLoading.set(false)
@@ -125,53 +129,69 @@ export const storeActions = {
   },
 
   setupRealTimeSync() {
-    // Listen for Autonote 'update' events from backend
-    ipc.on('vault:realtime-update', async () => {
-      console.log('Real-time update received from peer')
-      syncStatus.set('syncing')
+    console.log('Setting up real-time sync listeners')
 
-      try {
-        await this.loadVaultData()
-        lastSyncTime.set(Date.now())
-        syncStatus.set('synced')
+    // Remove any existing listeners first
+    ipc.off('vault:realtime-update', this.handleRealTimeUpdate)
+    ipc.off('vault:update', this.handleVaultUpdate)
 
-        // Show subtle notification
-        this.showSyncNotification('Changes synced from peer')
-      } catch (error) {
-        console.error('Failed to sync updates:', error)
-        syncStatus.set('error')
-      }
-    })
+    // Set up new listeners
+    ipc.on('vault:realtime-update', this.handleRealTimeUpdate)
+    ipc.on('vault:update', this.handleVaultUpdate)
   },
 
-  showSyncNotification(message: string) {
-    showToast(message, 'info')
+  handleRealTimeUpdate: async () => {
+    console.log('🔄 Real-time update received from peer')
+    syncStatus.set('syncing')
+
+    try {
+      await storeActions.loadVaultData()
+      lastSyncTime.set(Date.now())
+      syncStatus.set('synced')
+      showToast('Changes synced from peer', 'info')
+    } catch (error) {
+      console.error('Failed to sync updates:', error)
+      syncStatus.set('error')
+      showToast('Sync error', 'error')
+    }
+  },
+
+  handleVaultUpdate: async () => {
+    console.log('📄 Vault update event received')
+    await storeActions.loadVaultData()
   },
 
   async loadVaultData() {
-    const [profileData, groupsData, pagesData] = await Promise.all([
-      ipc.getProfile(),
-      ipc.listGroups(),
-      ipc.listPages()
-    ])
+    try {
+      const [profileData, groupsData, pagesData] = await Promise.all([
+        ipc.getProfile(),
+        ipc.listGroups(),
+        ipc.listPages()
+      ])
 
-    profile.set(profileData)
-    groups.set(groupsData)
+      console.log('📊 Loading vault data:', {
+        profile: profileData?.displayName,
+        groups: groupsData.length,
+        pages: pagesData.length
+      })
 
-    // Update pages and check if current page changed
-    const currentPageId = currentPage.subscribe(page => page?.id)
-    pages.set(pagesData)
+      profile.set(profileData)
+      groups.set(groupsData)
+      pages.set(pagesData)
 
-    // Refresh current page if it was updated by peer
-    const current = currentPage.subscribe(page => {
-      if (page) {
-        const updatedPage = pagesData.find(p => p.id === page.id)
-        if (updatedPage && updatedPage.updatedAt > page.updatedAt) {
-          console.log(`Page "${updatedPage.title}" was updated by peer`)
-          currentPage.set(updatedPage)
+      // Force refresh current page if it was updated
+      if (currentPageId) {
+        const updatedCurrentPage = pagesData.find(p => p.id === currentPageId)
+        if (updatedCurrentPage) {
+          // Force a new object reference to trigger reactivity
+          currentPage.set({ ...updatedCurrentPage })
+          console.log('🔄 Current page refreshed:', updatedCurrentPage.title, 'Content length:', updatedCurrentPage.content?.length)
         }
       }
-    })
+    } catch (error) {
+      console.error('Failed to load vault data:', error)
+      throw error
+    }
   },
 
   // Profile actions
@@ -227,7 +247,10 @@ export const storeActions = {
     pages.update(items => items.map(item => item.id === id ? updated : item))
 
     // Update current page if it's the one being updated
-    currentPage.update(current => current?.id === id ? updated : current)
+    if (currentPageId === id) {
+      currentPage.set(updated)
+    }
+
     syncStatus.set('synced')
     lastSyncTime.set(Date.now())
     return updated
@@ -239,7 +262,10 @@ export const storeActions = {
     pages.update(items => items.filter(item => item.id !== id))
 
     // Clear current page if it's the one being deleted
-    currentPage.update(current => current?.id === id ? null : current)
+    if (currentPageId === id) {
+      currentPage.set(null)
+    }
+
     syncStatus.set('synced')
     lastSyncTime.set(Date.now())
   },
@@ -261,59 +287,55 @@ export const storeActions = {
   }
 }
 
-// Set up IPC event listeners for real-time updates
-ipc.on('vault:update', () => {
-  console.log('Vault update event received')
-  storeActions.loadVaultData()
-})
-
-// Individual entity updates from peers
+// Set up individual entity update listeners
 ipc.on('profile:updated', (data: Profile) => {
-  console.log('Profile updated by peer:', data.displayName)
+  console.log('👤 Profile updated by peer:', data.displayName)
   profile.set(data)
-  storeActions.showSyncNotification('Profile updated by peer')
+  showToast('Profile updated by peer', 'info')
 })
 
 ipc.on('group:created', (data: Group) => {
-  console.log('Group created by peer:', data.name)
+  console.log('📁 Group created by peer:', data.name)
   groups.update(items => [...items, data])
-  storeActions.showSyncNotification(`Group "${data.name}" created by peer`)
+  showToast(`Group "${data.name}" created by peer`, 'success')
 })
 
 ipc.on('group:updated', (data: Group) => {
-  console.log('Group updated by peer:', data.name)
+  console.log('📁 Group updated by peer:', data.name)
   groups.update(items => items.map(item => item.id === data.id ? data : item))
-  storeActions.showSyncNotification(`Group "${data.name}" updated by peer`)
+  showToast(`Group "${data.name}" updated by peer`, 'info')
 })
 
 ipc.on('group:deleted', (data: { id: string }) => {
-  console.log('Group deleted by peer:', data.id)
+  console.log('🗑️ Group deleted by peer:', data.id)
   groups.update(items => items.filter(item => item.id !== data.id))
-  storeActions.showSyncNotification('Group deleted by peer')
+  showToast('Group deleted by peer', 'warning')
 })
 
 ipc.on('page:created', (data: Page) => {
-  console.log('Page created by peer:', data.title)
+  console.log('📄 Page created by peer:', data.title)
   pages.update(items => [data, ...items])
-  storeActions.showSyncNotification(`Page "${data.title}" created by peer`)
+  showToast(`Page "${data.title}" created by peer`, 'success')
 })
 
 ipc.on('page:updated', (data: Page) => {
-  console.log('Page updated by peer:', data.title)
+  console.log('✏️ Page updated by peer:', data.title)
   pages.update(items => items.map(item => item.id === data.id ? data : item))
 
-  // If this is the currently open page, show it was updated
-  const current = currentPage.subscribe(page => {
-    if (page?.id === data.id) {
-      currentPage.set(data)
-      storeActions.showSyncNotification(`"${data.title}" was updated by peer`)
-    }
-  })
+  // Update current page if it's the one being updated
+  if (currentPageId === data.id) {
+    currentPage.set(data)
+    showToast(`"${data.title}" was updated by peer`, 'info')
+  }
 })
 
 ipc.on('page:deleted', (data: { id: string }) => {
-  console.log('Page deleted by peer:', data.id)
+  console.log('🗑️ Page deleted by peer:', data.id)
   pages.update(items => items.filter(item => item.id !== data.id))
-  currentPage.update(current => current?.id === data.id ? null : current)
-  storeActions.showSyncNotification('Page deleted by peer')
+
+  if (currentPageId === data.id) {
+    currentPage.set(null)
+  }
+
+  showToast('Page deleted by peer', 'warning')
 })
