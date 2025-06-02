@@ -17,6 +17,8 @@
   import ProfileModal from "./ProfileModal.svelte";
   import GroupModal from "./GroupModal.svelte";
   import InviteModal from "./InviteModal.svelte";
+  import SyncStatus from "./SyncStatus.svelte";
+  import ToastContainer from "./ToastContainer.svelte";
   import type { Group, Page } from "../lib/ipc";
 
   let showProfileModal = false;
@@ -92,13 +94,16 @@
         </div>
         <div class="name">{$profile?.displayName || "Unknown User"}</div>
       </div>
-      <button
-        class="btn-icon"
-        on:click={() => (showInviteModal = true)}
-        title="Share Vault"
-      >
-        share
-      </button>
+      <div class="profile-actions">
+        <SyncStatus />
+        <button
+          class="btn-icon"
+          on:click={() => (showInviteModal = true)}
+          title="Share Vault"
+        >
+          share
+        </button>
+      </div>
     </div>
 
     <!-- Search -->
@@ -157,10 +162,6 @@
               >{$pages.filter((p) => p.groupId === group.id).length}</span
             >
             <div class="group-actions">
-              <!-- <button -->
-              <!--   class="btn-icon" -->
-              <!--   on:click={(e) => createGroup(group.id, e)}>create</button -->
-              <!-- > -->
               <button class="btn-icon" on:click={(e) => editGroup(group, e)}
                 >edit</button
               >
@@ -293,6 +294,9 @@
   <InviteModal on:close={() => (showInviteModal = false)} />
 {/if}
 
+<!-- Toast Notifications -->
+<ToastContainer />
+
 <style>
   .main-layout {
     display: flex;
@@ -323,6 +327,12 @@
     gap: 0.75rem;
     cursor: pointer;
     flex: 1;
+  }
+
+  .profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .avatar {

@@ -36,6 +36,29 @@ function saveVaultsConfig() {
   }
 }
 
+
+// Set up real-time sync listeners on Autonote instance
+function setupRealTimeSync(autonote: any) {
+  console.log('Setting up real-time sync listeners')
+
+  // Listen for Autonote 'update' events - this fires when peers make changes
+  autonote.on('update', () => {
+    console.log('🔄 Autonote update event - peer changes detected')
+    sendToRenderer('vault:realtime-update', {})
+  })
+
+  // Additional sync events for more granular updates
+  autonote.on('peer-connected', (peerInfo: any) => {
+    console.log('👥 Peer connected:', peerInfo)
+    sendToRenderer('sync:peer-connected', peerInfo)
+  })
+
+  autonote.on('peer-disconnected', (peerInfo: any) => {
+    console.log('👥 Peer disconnected:', peerInfo)
+    sendToRenderer('sync:peer-disconnected', peerInfo)
+  })
+}
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -156,6 +179,7 @@ ipcMain.handle('vault:open', async (event, { path }) => {
       sendToRenderer('vault:update', {})
     })
 
+    setupRealTimeSync(currentAutonote)
     return true
   } catch (error) {
     console.error('Failed to open vault:', error)

@@ -2,10 +2,13 @@
   import { onMount } from "svelte";
   import { ipc, type Vault } from "../lib/ipc";
   import { storeActions } from "../lib/stores";
+  import JoinVaultModal from "./JoinVaultModal.svelte";
+  import SyncStatus from "./SyncStatus.svelte";
 
   let vaults: Vault[] = [];
   let isLoading = false;
   let showCreateModal = false;
+  let showJoinModal = false;
   let newVaultName = "";
   let newVaultPath = "";
 
@@ -44,19 +47,31 @@
     }
   }
 
+  function onVaultJoined(event: any) {
+    const vault = event.detail;
+    vaults = [...vaults, vault];
+    showJoinModal = false;
+    openVault(vault);
+  }
+
   function selectPath() {
-    // This would open a directory dialog - we'll implement in the main process
     // @ts-ignore
     ipc.invoke("dialog:selectDirectory").then((path: any) => {
       if (path) newVaultPath = path;
     });
+  }
+
+  function handleCreateModalKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      showCreateModal = false;
+    }
   }
 </script>
 
 <div class="vault-selection">
   <div class="header">
     <h1>Autonote</h1>
-    <p>Select a vault to open or create a new one</p>
+    <p>Select a vault to open or create/join one</p>
   </div>
 
   <div class="vault-list">
@@ -71,13 +86,13 @@
           <p>{vault.path}</p>
           <small>{new Date(vault.lastAccessed).toLocaleDateString()}</small>
         </div>
-        <div class="vault-arrow"></div>
+        <div class="vault-arrow">-></div>
       </div>
     {/each}
 
     {#if vaults.length === 0}
       <div class="empty-state">
-        <p>No vaults found. Create your first vault to get started.</p>
+        <p>No vaults found. Create a new vault or join an existing one.</p>
       </div>
     {/if}
   </div>
@@ -85,6 +100,9 @@
   <div class="actions">
     <button class="btn-primary" on:click={() => (showCreateModal = true)}>
       Create New Vault
+    </button>
+    <button class="btn-secondary" on:click={() => (showJoinModal = true)}>
+      Join Vault
     </button>
   </div>
 
@@ -97,58 +115,69 @@
 </div>
 
 {#if showCreateModal}
-  <div
-    class="modal-backdrop"
-    on:keypress={() => (showCreateModal = false)}
-    on:click={() => (showCreateModal = false)}
-  >
-    <div class="modal" on:click|stopPropagation>
+  <div class="modal-backdrop" on:click={() => (showCreateModal = false)}>
+    <div
+      class="modal"
+      on:click|stopPropagation
+      on:keydown={handleCreateModalKeydown}
+    >
       <h2>Create New Vault</h2>
 
-      <div class="form-group">
-        <label for="vaultName">Vault Name</label>
-        <input
-          id="vaultName"
-          type="text"
-          bind:value={newVaultName}
-          placeholder="My Notes"
-          required
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="vaultPath">Storage Location</label>
-        <div class="path-input">
+      <form on:submit|preventDefault={createVault}>
+        <div class="form-group">
+          <label for="vaultName">Vault Name</label>
           <input
-            id="vaultPath"
+            id="vaultName"
             type="text"
-            bind:value={newVaultPath}
-            placeholder="/path/to/vault"
+            bind:value={newVaultName}
+            placeholder="My Notes"
             required
+            autofocus
           />
-          <button type="button" class="btn-secondary" on:click={selectPath}>
-            Browse
+        </div>
+
+        <div class="form-group">
+          <label for="vaultPath">Storage Location</label>
+          <div class="path-input">
+            <input
+              id="vaultPath"
+              type="text"
+              bind:value={newVaultPath}
+              placeholder="/path/to/vault"
+              required
+            />
+            <button type="button" class="btn-secondary" on:click={selectPath}>
+              Browse
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            on:click={() => (showCreateModal = false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            disabled={!newVaultName.trim() || !newVaultPath.trim()}
+          >
+            Create Vault
           </button>
         </div>
-      </div>
-
-      <div class="modal-actions">
-        <button
-          class="btn-secondary"
-          on:click={() => (showCreateModal = false)}
-        >
-          Cancel
-        </button>
-        <button
-          class="btn-primary"
-          on:click={createVault}
-          disabled={!newVaultName.trim() || !newVaultPath.trim()}
-        >
-          Create Vault
-        </button>
-      </div>
+      </form>
     </div>
   </div>
+{/if}
+
+{#if showJoinModal}
+  <JoinVaultModal
+    on:close={() => (showJoinModal = false)}
+    on:vaultJoined={onVaultJoined}
+  />
 {/if}
 
 <style>
@@ -227,7 +256,9 @@
   }
 
   .actions {
-    text-align: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
   }
 
   .btn-primary,
@@ -353,3 +384,4 @@
     margin-top: 2rem;
   }
 </style>
+
