@@ -1,4 +1,4 @@
-// frontend/svelte/src/lib/stores.ts - Fixed version
+// frontend/svelte/src/lib/stores.ts - Fixed version with proper block event handling
 import { writable, derived } from 'svelte/store'
 import type { Profile, Group, Page, Vault } from './ipc'
 import { ipc } from './ipc'
@@ -19,6 +19,9 @@ export const groups = writable<Group[]>([])
 export const pages = writable<Page[]>([])
 export const currentPage = writable<Page | null>(null)
 export const pageVersions = writable<Map<string, number>>(new Map())
+
+// Blocks store for real-time updates
+export const blocks = writable<Map<string, Block[]>>(new Map()) // pageId -> blocks[]
 
 // UI state
 export const selectedGroupId = writable<string | null>(null)
@@ -122,6 +125,7 @@ export const storeActions = {
     pages.set([])
     currentPage.set(null)
     pageVersions.set(new Map())
+    blocks.set(new Map())
     syncStatus.set('offline')
   },
 
@@ -299,6 +303,13 @@ export const storeActions = {
       return newVersions
     })
 
+    // Remove blocks for this page
+    blocks.update(pageBlocks => {
+      const newBlocks = new Map(pageBlocks)
+      newBlocks.delete(id)
+      return newBlocks
+    })
+
     if (currentPageId === id) {
       currentPage.set(null)
     }
@@ -319,7 +330,16 @@ export const storeActions = {
 
   async getBlocksByPage(pageId: string): Promise<Block[]> {
     try {
-      return await ipc.getBlocksByPage(pageId);
+      const pageBlocks = await ipc.getBlocksByPage(pageId);
+
+      // Update blocks store
+      blocks.update(allBlocks => {
+        const newBlocks = new Map(allBlocks)
+        newBlocks.set(pageId, pageBlocks)
+        return newBlocks
+      })
+
+      return pageBlocks;
     } catch (error) {
       console.error('Failed to get blocks:', error);
       return [];
@@ -333,6 +353,15 @@ export const storeActions = {
   async createBlock(pageId: string, type: string, content: string, options: any = {}): Promise<Block> {
     syncStatus.set('syncing');
     const block = await ipc.createBlock(pageId, type, content, options);
+
+    // Update blocks store
+    blocks.update(allBlocks => {
+      const newBlocks = new Map(allBlocks)
+      const pageBlocks = newBlocks.get(pageId) || []
+      newBlocks.set(pageId, [...pageBlocks, block].sort((a, b) => a.position - b.position))
+      return newBlocks
+    })
+
     syncStatus.set('synced');
     lastSyncTime.set(Date.now());
     return block;
@@ -341,6 +370,22 @@ export const storeActions = {
   async updateBlock(id: string, updates: any): Promise<Block> {
     syncStatus.set('syncing');
     const updated = await ipc.updateBlock(id, updates);
+
+    // Update blocks store
+    blocks.update(allBlocks => {
+      const newBlocks = new Map(allBlocks)
+      for (const [pageId, pageBlocks] of newBlocks.entries()) {
+        const index = pageBlocks.findIndex(b => b.id === id)
+        if (index >= 0) {
+          const updatedBlocks = [...pageBlocks]
+          updatedBlocks[index] = updated
+          newBlocks.set(pageId, updatedBlocks)
+          break
+        }
+      }
+      return newBlocks
+    })
+
     syncStatus.set('synced');
     lastSyncTime.set(Date.now());
     return updated;
@@ -349,6 +394,20 @@ export const storeActions = {
   async deleteBlock(id: string): Promise<void> {
     syncStatus.set('syncing');
     await ipc.deleteBlock(id);
+
+    // Update blocks store
+    blocks.update(allBlocks => {
+      const newBlocks = new Map(allBlocks)
+      for (const [pageId, pageBlocks] of newBlocks.entries()) {
+        const filtered = pageBlocks.filter(b => b.id !== id)
+        if (filtered.length !== pageBlocks.length) {
+          newBlocks.set(pageId, filtered)
+          break
+        }
+      }
+      return newBlocks
+    })
+
     syncStatus.set('synced');
     lastSyncTime.set(Date.now());
   },
@@ -356,6 +415,22 @@ export const storeActions = {
   async moveBlock(id: string, position: number, parentId?: string): Promise<Block> {
     syncStatus.set('syncing');
     const updated = await ipc.moveBlock(id, position, parentId);
+
+    // Update blocks store
+    blocks.update(allBlocks => {
+      const newBlocks = new Map(allBlocks)
+      for (const [pageId, pageBlocks] of newBlocks.entries()) {
+        const index = pageBlocks.findIndex(b => b.id === id)
+        if (index >= 0) {
+          const updatedBlocks = [...pageBlocks]
+          updatedBlocks[index] = updated
+          newBlocks.set(pageId, updatedBlocks.sort((a, b) => a.position - b.position))
+          break
+        }
+      }
+      return newBlocks
+    })
+
     syncStatus.set('synced');
     lastSyncTime.set(Date.now());
     return updated;
@@ -364,6 +439,22 @@ export const storeActions = {
   async applyBlockOperation(blockId: string, operation: BlockOperation): Promise<{ operation: any, block: Block }> {
     syncStatus.set('syncing');
     const result = await ipc.applyBlockOperation(blockId, operation);
+
+    // Update blocks store with the updated block
+    blocks.update(allBlocks => {
+      const newBlocks = new Map(allBlocks)
+      for (const [pageId, pageBlocks] of newBlocks.entries()) {
+        const index = pageBlocks.findIndex(b => b.id === blockId)
+        if (index >= 0) {
+          const updatedBlocks = [...pageBlocks]
+          updatedBlocks[index] = result.block
+          newBlocks.set(pageId, updatedBlocks)
+          break
+        }
+      }
+      return newBlocks
+    })
+
     syncStatus.set('synced');
     lastSyncTime.set(Date.now());
     return result;
@@ -371,10 +462,18 @@ export const storeActions = {
 
   async migratePageToBlocks(pageId: string): Promise<Block[]> {
     syncStatus.set('syncing');
-    const blocks = await ipc.migratePageToBlocks(pageId);
+    const pageBlocks = await ipc.migratePageToBlocks(pageId);
+
+    // Update blocks store
+    blocks.update(allBlocks => {
+      const newBlocks = new Map(allBlocks)
+      newBlocks.set(pageId, pageBlocks)
+      return newBlocks
+    })
+
     syncStatus.set('synced');
     lastSyncTime.set(Date.now());
-    return blocks;
+    return pageBlocks;
   }
 }
 
@@ -462,9 +561,102 @@ ipc.on('page:deleted', (data: { id: string }) => {
     return newVersions
   })
 
+  blocks.update(allBlocks => {
+    const newBlocks = new Map(allBlocks)
+    newBlocks.delete(data.id)
+    return newBlocks
+  })
+
   if (currentPageId === data.id) {
     currentPage.set(null)
   }
 
   showToast('Page deleted by peer', 'warning')
+})
+
+// BLOCK EVENT LISTENERS - This is the key addition!
+ipc.on('block:created', (data: Block) => {
+  console.log('Block created by peer:', data.id)
+
+  blocks.update(allBlocks => {
+    const newBlocks = new Map(allBlocks)
+    const pageBlocks = newBlocks.get(data.pageId) || []
+    const exists = pageBlocks.some(b => b.id === data.id)
+
+    if (!exists) {
+      newBlocks.set(data.pageId, [...pageBlocks, data].sort((a, b) => a.position - b.position))
+    }
+
+    return newBlocks
+  })
+
+  // Dispatch custom event for BlockEditor to listen to
+  window.dispatchEvent(new CustomEvent('block-updated', { detail: data }))
+  showToast('Block created by peer', 'success')
+})
+
+ipc.on('block:updated', (data: Block) => {
+  console.log('Block updated by peer:', data.id)
+
+  blocks.update(allBlocks => {
+    const newBlocks = new Map(allBlocks)
+    const pageBlocks = newBlocks.get(data.pageId) || []
+    const index = pageBlocks.findIndex(b => b.id === data.id)
+
+    if (index >= 0) {
+      const updatedBlocks = [...pageBlocks]
+      updatedBlocks[index] = data
+      newBlocks.set(data.pageId, updatedBlocks)
+    } else {
+      // Block doesn't exist, add it
+      newBlocks.set(data.pageId, [...pageBlocks, data].sort((a, b) => a.position - b.position))
+    }
+
+    return newBlocks
+  })
+
+  // Dispatch custom event for BlockEditor to listen to
+  window.dispatchEvent(new CustomEvent('block-updated', { detail: data }))
+  showToast('Block updated by peer', 'info')
+})
+
+ipc.on('block:deleted', (data: { id: string }) => {
+  console.log('Block deleted by peer:', data.id)
+
+  blocks.update(allBlocks => {
+    const newBlocks = new Map(allBlocks)
+    for (const [pageId, pageBlocks] of newBlocks.entries()) {
+      const filtered = pageBlocks.filter(b => b.id !== data.id)
+      if (filtered.length !== pageBlocks.length) {
+        newBlocks.set(pageId, filtered)
+        break
+      }
+    }
+    return newBlocks
+  })
+
+  // Dispatch custom event
+  window.dispatchEvent(new CustomEvent('block-deleted', { detail: data }))
+  showToast('Block deleted by peer', 'warning')
+})
+
+ipc.on('block:operation-applied', (data: { operation: any, block: Block }) => {
+  console.log('Block operation applied by peer:', data.block.id)
+
+  blocks.update(allBlocks => {
+    const newBlocks = new Map(allBlocks)
+    const pageBlocks = newBlocks.get(data.block.pageId) || []
+    const index = pageBlocks.findIndex(b => b.id === data.block.id)
+
+    if (index >= 0) {
+      const updatedBlocks = [...pageBlocks]
+      updatedBlocks[index] = data.block
+      newBlocks.set(data.block.pageId, updatedBlocks)
+    }
+
+    return newBlocks
+  })
+
+  // Dispatch custom event
+  window.dispatchEvent(new CustomEvent('block-operation-applied', { detail: data }))
 })

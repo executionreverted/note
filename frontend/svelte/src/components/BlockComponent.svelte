@@ -21,13 +21,34 @@
   let lastSavedContent = currentContent;
   let selectionPosition = 0;
   let updateTimeout: ReturnType<typeof setTimeout>;
+  let blockVersion = block.version || 0;
+
   $: blockClass = `block block-${block.type} ${isEditing ? "editing" : ""}`;
 
   // Update local state when block prop changes from external source
-  $: if (block && block.content !== lastSavedContent) {
-    currentContent = block.content;
-    lastSavedContent = block.content;
-    currentMetadata = block.metadata || {};
+  $: if (
+    block &&
+    (block.version !== blockVersion || block.content !== lastSavedContent)
+  ) {
+    console.log(`Block ${block.id} updated externally:`, {
+      oldVersion: blockVersion,
+      newVersion: block.version,
+      oldContent: lastSavedContent,
+      newContent: block.content,
+    });
+
+    // Only update if the version changed (indicates external update)
+    if (block.version !== blockVersion) {
+      currentContent = block.content || "";
+      lastSavedContent = currentContent;
+      currentMetadata = block.metadata || {};
+      blockVersion = block.version;
+
+      // Update the DOM content if we're not currently editing
+      if (!isEditing && contentElement) {
+        contentElement.textContent = currentContent;
+      }
+    }
   }
 
   onMount(() => {
@@ -40,44 +61,7 @@
         if (contentEl) contentEl.focus();
       }, 10);
     }
-
-    // Add event listener for real-time updates
-    window.addEventListener("block-updated", handleBlockUpdate);
-    window.addEventListener("block-operation-applied", handleOperationApplied);
   });
-
-  onDestroy(() => {
-    window.removeEventListener("block-updated", handleBlockUpdate);
-    window.removeEventListener(
-      "block-operation-applied",
-      handleOperationApplied,
-    );
-  });
-
-  function handleBlockUpdate(event: CustomEvent) {
-    const updatedBlock = event.detail;
-    if (updatedBlock.id === block.id) {
-      // Only update if it's not from our own edits
-      if (updatedBlock.updatedBy !== block.updatedBy) {
-        block = updatedBlock;
-        currentContent = updatedBlock.content;
-        lastSavedContent = updatedBlock.content;
-        currentMetadata = JSON.parse(updatedBlock.metadata || "{}");
-      }
-    }
-  }
-
-  function handleOperationApplied(event: CustomEvent) {
-    const { operation, block: updatedBlock } = event.detail;
-    if (updatedBlock.id === block.id) {
-      // Only apply if it's not our own operation
-      if (!isEditing) {
-        block = updatedBlock;
-        currentContent = updatedBlock.content;
-        lastSavedContent = updatedBlock.content;
-      }
-    }
-  }
 
   afterUpdate(() => {
     // Restore cursor position after component updates
@@ -89,10 +73,13 @@
   function startEditing() {
     if (readOnly) return;
     isEditing = true;
+    console.log(`Started editing block ${block.id}`);
   }
 
   function stopEditing() {
     isEditing = false;
+    console.log(`Stopped editing block ${block.id}`);
+
     if (currentContent !== lastSavedContent) {
       dispatch("update", { content: currentContent });
       lastSavedContent = currentContent;
@@ -190,9 +177,6 @@
               value: indentChar,
             });
 
-            // dispatch("update", { content: currentContent });
-            // lastSavedContent = currentContent;
-
             // Update caret position
             setTimeout(() => {
               setCaretPosition(contentElement, position + indentChar.length);
@@ -212,9 +196,6 @@
       dispatch("move", { direction: event.key === "ArrowUp" ? "up" : "down" });
       return;
     }
-
-    // Catch-all for regular typing operations
-    // Actual operations will be created in the handleInput function
   }
 
   function handleInput(event: Event) {
@@ -224,34 +205,18 @@
     // Save selection position
     saveSelection();
 
-    // Detect what changed
+    // Detect what changed and queue operations
     if (newContent.length > currentContent.length) {
       // Text was added
-      if (newContent.startsWith(currentContent)) {
-        // Addition at the end
-        const addedText = newContent.substring(currentContent.length);
-        const position = currentContent.length;
+      const position = findDifferencePosition(currentContent, newContent);
+      const addedLength = newContent.length - currentContent.length;
+      const addedText = newContent.substring(position, position + addedLength);
 
-        queueLocalOperation(block.id, {
-          type: "insert",
-          position,
-          value: addedText,
-        });
-      } else {
-        // Addition somewhere else
-        const position = findDifferencePosition(currentContent, newContent);
-        const addedLength = newContent.length - currentContent.length;
-        const addedText = newContent.substring(
-          position,
-          position + addedLength,
-        );
-
-        queueLocalOperation(block.id, {
-          type: "insert",
-          position,
-          value: addedText,
-        });
-      }
+      queueLocalOperation(block.id, {
+        type: "insert",
+        position,
+        value: addedText,
+      });
     } else if (newContent.length < currentContent.length) {
       // Text was removed
       const position = findDifferencePosition(currentContent, newContent);
@@ -265,16 +230,6 @@
     }
 
     currentContent = newContent;
-
-    // Mark as dirty if needed
-    // if (currentContent !== lastSavedContent) {
-    //   // Debounce updates
-    //   clearTimeout(updateTimeout);
-    //   updateTimeout = setTimeout(() => {
-    //     dispatch("update", { content: currentContent });
-    //     lastSavedContent = currentContent;
-    //   }, 1000);
-    // }
   }
 
   function handleBlur() {

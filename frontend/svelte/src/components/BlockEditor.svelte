@@ -1,7 +1,7 @@
-<!-- frontend/svelte/src/components/BlockEditor.svelte -->
+<!-- frontend/svelte/src/components/BlockEditor.svelte - Fixed version -->
 <script lang="ts">
   import { onDestroy, onMount, createEventDispatcher } from "svelte";
-  import { storeActions } from "../lib/stores";
+  import { storeActions, blocks } from "../lib/stores";
   import BlockComponent from "./BlockComponent.svelte";
   import AddBlockButton from "./AddBlockButton.svelte";
   import type { Block } from "../lib/types";
@@ -11,48 +11,21 @@
 
   const dispatch = createEventDispatcher();
 
-  let blocks: Block[] = [];
   let isLoading = true;
   let draggedBlockId: string | null = null;
   let dragOverPosition: number | null = null;
 
+  // Get blocks for this page from the store
+  $: pageBlocks = $blocks.get(pageId) || [];
+
   onMount(async () => {
     await loadBlocks();
-
-    // Listen for block updates from peers
-    window.addEventListener("block-updated", handleBlockUpdate);
   });
-
-  // Add cleanup:
-  onDestroy(() => {
-    window.removeEventListener("block-updated", handleBlockUpdate);
-  });
-
-  function handleBlockUpdate(event: CustomEvent) {
-    const updatedBlock = event.detail;
-
-    // Only update if we have this page loaded
-    if (updatedBlock.pageId === pageId) {
-      // Check if this block is already in our list
-      const index = blocks.findIndex((b) => b.id === updatedBlock.id);
-
-      if (index >= 0) {
-        // Update existing block
-        blocks[index] = updatedBlock;
-        blocks = [...blocks]; // Force Svelte to update
-      } else {
-        // New block - add it in the right position
-        blocks = [...blocks, updatedBlock].sort(
-          (a, b) => a.position - b.position,
-        );
-      }
-    }
-  }
 
   async function loadBlocks() {
     isLoading = true;
     try {
-      blocks = await storeActions.getBlocksByPage(pageId);
+      await storeActions.getBlocksByPage(pageId);
     } catch (error) {
       console.error("Failed to load blocks:", error);
     } finally {
@@ -66,17 +39,14 @@
         position,
       });
 
-      // Insert block at position
-      blocks = [
-        ...blocks.slice(0, position),
-        newBlock,
-        ...blocks.slice(position),
-      ];
-
       // Update positions of subsequent blocks
-      for (let i = position + 1; i < blocks.length; i++) {
-        await storeActions.updateBlock(blocks[i].id, { position: i });
-        blocks[i].position = i;
+      const blocksToUpdate = pageBlocks.slice(position);
+      for (let i = 0; i < blocksToUpdate.length; i++) {
+        if (blocksToUpdate[i].id !== newBlock.id) {
+          await storeActions.updateBlock(blocksToUpdate[i].id, {
+            position: position + i + 1,
+          });
+        }
       }
 
       // Focus the new block
@@ -94,8 +64,7 @@
 
   async function handleUpdateBlock(id: string, updates: any) {
     try {
-      const updatedBlock = await storeActions.updateBlock(id, updates);
-      blocks = blocks.map((block) => (block.id === id ? updatedBlock : block));
+      await storeActions.updateBlock(id, updates);
     } catch (error) {
       console.error("Failed to update block:", error);
     }
@@ -103,14 +72,15 @@
 
   async function handleDeleteBlock(id: string) {
     try {
+      const index = pageBlocks.findIndex((block) => block.id === id);
       await storeActions.deleteBlock(id);
-      const index = blocks.findIndex((block) => block.id === id);
-      blocks = blocks.filter((block) => block.id !== id);
 
       // Update positions of subsequent blocks
-      for (let i = index; i < blocks.length; i++) {
-        await storeActions.updateBlock(blocks[i].id, { position: i });
-        blocks[i].position = i;
+      const blocksToUpdate = pageBlocks.slice(index + 1);
+      for (let i = 0; i < blocksToUpdate.length; i++) {
+        await storeActions.updateBlock(blocksToUpdate[i].id, {
+          position: index + i,
+        });
       }
     } catch (error) {
       console.error("Failed to delete block:", error);
@@ -139,7 +109,7 @@
 
     e.preventDefault();
 
-    const sourceIndex = blocks.findIndex(
+    const sourceIndex = pageBlocks.findIndex(
       (block) => block.id === draggedBlockId,
     );
     if (sourceIndex === -1) return;
@@ -151,25 +121,18 @@
     }
 
     // Move the block
-    const movedBlock = await storeActions.moveBlock(
-      draggedBlockId,
-      newPosition,
-    );
+    await storeActions.moveBlock(draggedBlockId, newPosition);
 
-    // Rearrange blocks
-    const blocksCopy = [...blocks];
-    const [removed] = blocksCopy.splice(sourceIndex, 1);
-    blocksCopy.splice(newPosition, 0, removed);
+    // Update positions of all affected blocks
+    const minPos = Math.min(sourceIndex, newPosition);
+    const maxPos = Math.max(sourceIndex, newPosition);
 
-    // Update positions
-    for (let i = 0; i < blocksCopy.length; i++) {
-      blocksCopy[i].position = i;
-      if (blocksCopy[i].id !== draggedBlockId) {
-        await storeActions.updateBlock(blocksCopy[i].id, { position: i });
+    for (let i = minPos; i <= maxPos; i++) {
+      if (pageBlocks[i] && pageBlocks[i].id !== draggedBlockId) {
+        await storeActions.updateBlock(pageBlocks[i].id, { position: i });
       }
     }
 
-    blocks = blocksCopy;
     draggedBlockId = null;
     dragOverPosition = null;
   }
@@ -179,10 +142,10 @@
     position: number,
     content: string,
   ) {
-    const block = blocks.find((b) => b.id === blockId);
+    const block = pageBlocks.find((b) => b.id === blockId);
     if (!block) return;
 
-    const blockIndex = blocks.findIndex((b) => b.id === blockId);
+    const blockIndex = pageBlocks.findIndex((b) => b.id === blockId);
 
     // Update the original block with content before cursor
     const beforeText = content.substring(0, position);
@@ -192,18 +155,20 @@
     const afterText = content.substring(position);
     await handleAddBlock(block.type, blockIndex + 1);
 
-    const newBlockId = blocks[blockIndex + 1].id;
-    await handleUpdateBlock(newBlockId, { content: afterText });
+    // Find the newly created block and update its content
+    const updatedPageBlocks = $blocks.get(pageId) || [];
+    const newBlock = updatedPageBlocks.find(
+      (b) => b.position === blockIndex + 1 && b.id !== blockId,
+    );
+
+    if (newBlock) {
+      await handleUpdateBlock(newBlock.id, { content: afterText });
+    }
   }
 
   async function handleBlockOperation(blockId: string, operation: any) {
     try {
-      const result = await storeActions.applyBlockOperation(blockId, operation);
-      const updatedBlock = result.block;
-
-      blocks = blocks.map((block) =>
-        block.id === blockId ? updatedBlock : block,
-      );
+      await storeActions.applyBlockOperation(blockId, operation);
     } catch (error) {
       console.error("Failed to apply operation:", error);
     }
@@ -213,7 +178,7 @@
 <div class="block-editor">
   {#if isLoading}
     <div class="loading">Loading blocks...</div>
-  {:else if blocks.length === 0}
+  {:else if pageBlocks.length === 0}
     <div class="empty-state">
       <p>This page is empty. Add your first block!</p>
       <button
@@ -225,7 +190,7 @@
     </div>
   {:else}
     <div class="blocks-container">
-      {#each blocks as block, index (block.id)}
+      {#each pageBlocks as block, index (block.id)}
         <div
           id={`block-${block.id}`}
           class="block-wrapper"
@@ -319,3 +284,4 @@
     opacity: 1;
   }
 </style>
+
