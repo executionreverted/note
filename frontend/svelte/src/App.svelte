@@ -5,10 +5,12 @@
   import VaultSelection from "./components/VaultSelection.svelte";
   import MainLayout from "./components/MainLayout.svelte";
 
-  // Global styles and app initialization
+  import { setupBlockSyncListeners } from "./lib/blockSync";
+
+  // Setup real-time sync on mount
   onMount(() => {
-    // App initialization if needed
-    console.log("Autonote app initialized");
+    setupBlockSyncListeners();
+    console.log("Autonote app initialized with block-based editing");
   });
 </script>
 

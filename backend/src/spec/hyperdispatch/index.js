@@ -21,8 +21,12 @@ class Router {
     this._handler10 = null
     this._handler11 = null
     this._handler12 = null
+    this._handler13 = null
+    this._handler14 = null
+    this._handler15 = null
+    this._handler16 = null
 
-    this._missing = 13
+    this._missing = 17
   }
 
   add(name, handler) {
@@ -66,6 +70,18 @@ class Router {
       case '@autonote/del-invite':
         this._handler12 = handler
         break
+      case '@autonote/create-block':
+        this._handler13 = handler
+        break
+      case '@autonote/update-block':
+        this._handler14 = handler
+        break
+      case '@autonote/delete-block':
+        this._handler15 = handler
+        break
+      case '@autonote/apply-operation':
+        this._handler16 = handler
+        break
       default:
         throw new Error('Cannot register a handler for a nonexistent route: ' + name)
     }
@@ -86,6 +102,10 @@ class Router {
     assert(this._handler10 !== null, 'Missing handler for "@autonote/delete-fileref"')
     assert(this._handler11 !== null, 'Missing handler for "@autonote/add-invite"')
     assert(this._handler12 !== null, 'Missing handler for "@autonote/del-invite"')
+    assert(this._handler13 !== null, 'Missing handler for "@autonote/create-block"')
+    assert(this._handler14 !== null, 'Missing handler for "@autonote/update-block"')
+    assert(this._handler15 !== null, 'Missing handler for "@autonote/delete-block"')
+    assert(this._handler16 !== null, 'Missing handler for "@autonote/apply-operation"')
   }
 
   async dispatch(message, context) {
@@ -124,6 +144,14 @@ class Router {
         return this._handler11(op.value, context)
       case 12:
         return this._handler12(op.value, context)
+      case 13:
+        return this._handler13(op.value, context)
+      case 14:
+        return this._handler14(op.value, context)
+      case 15:
+        return this._handler15(op.value, context)
+      case 16:
+        return this._handler16(op.value, context)
       default:
         throw new Error('Handler not found for ID:' + id)
     }
@@ -235,6 +263,30 @@ const route12 = {
   enc: getEncoding('@autonote/invite')
 }
 
+const route13 = {
+  name: '@autonote/create-block',
+  id: 13,
+  enc: getEncoding('@autonote/block')
+}
+
+const route14 = {
+  name: '@autonote/update-block',
+  id: 14,
+  enc: getEncoding('@autonote/block')
+}
+
+const route15 = {
+  name: '@autonote/delete-block',
+  id: 15,
+  enc: getEncoding('@autonote/block')
+}
+
+const route16 = {
+  name: '@autonote/apply-operation',
+  id: 16,
+  enc: getEncoding('@autonote/operation')
+}
+
 function getRouteByName(name) {
   switch (name) {
     case '@autonote/remove-writer':
@@ -263,6 +315,14 @@ function getRouteByName(name) {
       return route11
     case '@autonote/del-invite':
       return route12
+    case '@autonote/create-block':
+      return route13
+    case '@autonote/update-block':
+      return route14
+    case '@autonote/delete-block':
+      return route15
+    case '@autonote/apply-operation':
+      return route16
     default:
       throw new Error('Handler not found for name: ' + name)
   }
@@ -296,6 +356,14 @@ function getRouteById(id) {
       return route11
     case 12:
       return route12
+    case 13:
+      return route13
+    case 14:
+      return route14
+    case 15:
+      return route15
+    case 16:
+      return route16
     default:
       throw new Error('Handler not found for ID: ' + id)
   }
@@ -304,7 +372,6 @@ function getRouteById(id) {
 function dispatch(name, message, { version = defaultVersion } = {}) {
   return encode(name, message, { version })
 }
-
 module.exports = {
   version,
   encode,

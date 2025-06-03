@@ -78,6 +78,30 @@
       "name": "@autonote/del-invite",
       "requestType": "@autonote/invite",
       "version": 1
+    },
+    {
+      "id": 13,
+      "name": "@autonote/create-block",
+      "requestType": "@autonote/block",
+      "version": 1
+    },
+    {
+      "id": 14,
+      "name": "@autonote/update-block",
+      "requestType": "@autonote/block",
+      "version": 1
+    },
+    {
+      "id": 15,
+      "name": "@autonote/delete-block",
+      "requestType": "@autonote/block",
+      "version": 1
+    },
+    {
+      "id": 16,
+      "name": "@autonote/apply-operation",
+      "requestType": "@autonote/operation",
+      "version": 1
     }
   ]
 }

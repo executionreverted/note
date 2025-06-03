@@ -10,8 +10,122 @@ const VERSION = 2
 // eslint-disable-next-line no-unused-vars
 let version = VERSION
 
-// @autonote/profile
+// @autonote/block
 const encoding0 = {
+  preencode (state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.pageId)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.parentId) c.string.preencode(state, m.parentId)
+    c.string.preencode(state, m.type)
+    if (m.content) c.string.preencode(state, m.content)
+    if (m.metadata) c.string.preencode(state, m.metadata)
+    c.int.preencode(state, m.position)
+    c.int.preencode(state, m.createdAt)
+    c.int.preencode(state, m.updatedAt)
+    c.string.preencode(state, m.createdBy)
+    c.string.preencode(state, m.updatedBy)
+    c.int.preencode(state, m.version)
+  },
+  encode (state, m) {
+    const flags =
+      (m.parentId ? 1 : 0) |
+      (m.content ? 2 : 0) |
+      (m.metadata ? 4 : 0)
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.pageId)
+    c.uint.encode(state, flags)
+
+    if (m.parentId) c.string.encode(state, m.parentId)
+    c.string.encode(state, m.type)
+    if (m.content) c.string.encode(state, m.content)
+    if (m.metadata) c.string.encode(state, m.metadata)
+    c.int.encode(state, m.position)
+    c.int.encode(state, m.createdAt)
+    c.int.encode(state, m.updatedAt)
+    c.string.encode(state, m.createdBy)
+    c.string.encode(state, m.updatedBy)
+    c.int.encode(state, m.version)
+  },
+  decode (state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      pageId: r1,
+      parentId: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      type: c.string.decode(state),
+      content: (flags & 2) !== 0 ? c.string.decode(state) : null,
+      metadata: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      position: c.int.decode(state),
+      createdAt: c.int.decode(state),
+      updatedAt: c.int.decode(state),
+      createdBy: c.string.decode(state),
+      updatedBy: c.string.decode(state),
+      version: c.int.decode(state)
+    }
+  }
+}
+
+// @autonote/operation
+const encoding1 = {
+  preencode (state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.blockId)
+    c.string.preencode(state, m.type)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.position) c.int.preencode(state, m.position)
+    if (m.length) c.int.preencode(state, m.length)
+    if (m.value) c.string.preencode(state, m.value)
+    c.int.preencode(state, m.timestamp)
+    c.string.preencode(state, m.author)
+    c.int.preencode(state, m.baseVersion)
+  },
+  encode (state, m) {
+    const flags =
+      (m.position ? 1 : 0) |
+      (m.length ? 2 : 0) |
+      (m.value ? 4 : 0)
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.blockId)
+    c.string.encode(state, m.type)
+    c.uint.encode(state, flags)
+
+    if (m.position) c.int.encode(state, m.position)
+    if (m.length) c.int.encode(state, m.length)
+    if (m.value) c.string.encode(state, m.value)
+    c.int.encode(state, m.timestamp)
+    c.string.encode(state, m.author)
+    c.int.encode(state, m.baseVersion)
+  },
+  decode (state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      blockId: r1,
+      type: r2,
+      position: (flags & 1) !== 0 ? c.int.decode(state) : 0,
+      length: (flags & 2) !== 0 ? c.int.decode(state) : 0,
+      value: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      timestamp: c.int.decode(state),
+      author: c.string.decode(state),
+      baseVersion: c.int.decode(state)
+    }
+  }
+}
+
+// @autonote/profile
+const encoding2 = {
   preencode (state, m) {
     c.string.preencode(state, m.userId)
     c.string.preencode(state, m.displayName)
@@ -53,7 +167,7 @@ const encoding0 = {
 }
 
 // @autonote/group
-const encoding1 = {
+const encoding3 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
     c.string.preencode(state, m.name)
@@ -99,7 +213,7 @@ const encoding1 = {
 }
 
 // @autonote/page
-const encoding2 = {
+const encoding4 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
     c.string.preencode(state, m.title)
@@ -147,7 +261,7 @@ const encoding2 = {
 }
 
 // @autonote/fileref
-const encoding3 = {
+const encoding5 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
     c.string.preencode(state, m.pageId)
@@ -198,7 +312,7 @@ const encoding3 = {
 }
 
 // @autonote/writer
-const encoding4 = {
+const encoding6 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.key)
   },
@@ -215,7 +329,7 @@ const encoding4 = {
 }
 
 // @autonote/delete
-const encoding5 = {
+const encoding7 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
   },
@@ -232,7 +346,7 @@ const encoding5 = {
 }
 
 // @autonote/del-invite
-const encoding6 = {
+const encoding8 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.id)
   },
@@ -249,7 +363,7 @@ const encoding6 = {
 }
 
 // @autonote/invite
-const encoding7 = {
+const encoding9 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.id)
     c.buffer.preencode(state, m.invite)
@@ -277,8 +391,116 @@ const encoding7 = {
   }
 }
 
-// @autonote/profile/hyperdb#0
-const encoding8 = {
+// @autonote/block/hyperdb#0
+const encoding10 = {
+  preencode (state, m) {
+    c.string.preencode(state, m.pageId)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.parentId) c.string.preencode(state, m.parentId)
+    c.string.preencode(state, m.type)
+    if (m.content) c.string.preencode(state, m.content)
+    if (m.metadata) c.string.preencode(state, m.metadata)
+    c.int.preencode(state, m.position)
+    c.int.preencode(state, m.createdAt)
+    c.int.preencode(state, m.updatedAt)
+    c.string.preencode(state, m.createdBy)
+    c.string.preencode(state, m.updatedBy)
+    c.int.preencode(state, m.version)
+  },
+  encode (state, m) {
+    const flags =
+      (m.parentId ? 1 : 0) |
+      (m.content ? 2 : 0) |
+      (m.metadata ? 4 : 0)
+
+    c.string.encode(state, m.pageId)
+    c.uint.encode(state, flags)
+
+    if (m.parentId) c.string.encode(state, m.parentId)
+    c.string.encode(state, m.type)
+    if (m.content) c.string.encode(state, m.content)
+    if (m.metadata) c.string.encode(state, m.metadata)
+    c.int.encode(state, m.position)
+    c.int.encode(state, m.createdAt)
+    c.int.encode(state, m.updatedAt)
+    c.string.encode(state, m.createdBy)
+    c.string.encode(state, m.updatedBy)
+    c.int.encode(state, m.version)
+  },
+  decode (state) {
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      pageId: r1,
+      parentId: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      type: c.string.decode(state),
+      content: (flags & 2) !== 0 ? c.string.decode(state) : null,
+      metadata: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      position: c.int.decode(state),
+      createdAt: c.int.decode(state),
+      updatedAt: c.int.decode(state),
+      createdBy: c.string.decode(state),
+      updatedBy: c.string.decode(state),
+      version: c.int.decode(state)
+    }
+  }
+}
+
+// @autonote/operation/hyperdb#1
+const encoding11 = {
+  preencode (state, m) {
+    c.string.preencode(state, m.blockId)
+    c.string.preencode(state, m.type)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.position) c.int.preencode(state, m.position)
+    if (m.length) c.int.preencode(state, m.length)
+    if (m.value) c.string.preencode(state, m.value)
+    c.int.preencode(state, m.timestamp)
+    c.string.preencode(state, m.author)
+    c.int.preencode(state, m.baseVersion)
+  },
+  encode (state, m) {
+    const flags =
+      (m.position ? 1 : 0) |
+      (m.length ? 2 : 0) |
+      (m.value ? 4 : 0)
+
+    c.string.encode(state, m.blockId)
+    c.string.encode(state, m.type)
+    c.uint.encode(state, flags)
+
+    if (m.position) c.int.encode(state, m.position)
+    if (m.length) c.int.encode(state, m.length)
+    if (m.value) c.string.encode(state, m.value)
+    c.int.encode(state, m.timestamp)
+    c.string.encode(state, m.author)
+    c.int.encode(state, m.baseVersion)
+  },
+  decode (state) {
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: null,
+      blockId: r1,
+      type: r2,
+      position: (flags & 1) !== 0 ? c.int.decode(state) : 0,
+      length: (flags & 2) !== 0 ? c.int.decode(state) : 0,
+      value: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      timestamp: c.int.decode(state),
+      author: c.string.decode(state),
+      baseVersion: c.int.decode(state)
+    }
+  }
+}
+
+// @autonote/profile/hyperdb#5
+const encoding12 = {
   preencode (state, m) {
     c.string.preencode(state, m.displayName)
     state.end++ // max flag is 2 so always one byte
@@ -316,8 +538,8 @@ const encoding8 = {
   }
 }
 
-// @autonote/group/hyperdb#1
-const encoding9 = {
+// @autonote/group/hyperdb#6
+const encoding13 = {
   preencode (state, m) {
     c.string.preencode(state, m.name)
     state.end++ // max flag is 4 so always one byte
@@ -359,8 +581,8 @@ const encoding9 = {
   }
 }
 
-// @autonote/page/hyperdb#2
-const encoding10 = {
+// @autonote/page/hyperdb#7
+const encoding14 = {
   preencode (state, m) {
     c.string.preencode(state, m.title)
     state.end++ // max flag is 8 so always one byte
@@ -404,8 +626,8 @@ const encoding10 = {
   }
 }
 
-// @autonote/fileref/hyperdb#3
-const encoding11 = {
+// @autonote/fileref/hyperdb#8
+const encoding15 = {
   preencode (state, m) {
     c.string.preencode(state, m.pageId)
     c.string.preencode(state, m.filename)
@@ -452,8 +674,8 @@ const encoding11 = {
   }
 }
 
-// @autonote/invite/hyperdb#4
-const encoding12 = {
+// @autonote/invite/hyperdb#9
+const encoding16 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.invite)
     c.buffer.preencode(state, m.publicKey)
@@ -478,8 +700,8 @@ const encoding12 = {
   }
 }
 
-// @autonote/writer/hyperdb#5
-const encoding13 = {
+// @autonote/writer/hyperdb#10
+const encoding17 = {
   preencode (state, m) {
 
   },
@@ -493,8 +715,8 @@ const encoding13 = {
   }
 }
 
-// @autonote/delete/hyperdb#6
-const encoding14 = {
+// @autonote/delete/hyperdb#11
+const encoding18 = {
   preencode (state, m) {
 
   },
@@ -508,8 +730,8 @@ const encoding14 = {
   }
 }
 
-// @autonote/del-invite/hyperdb#7
-const encoding15 = encoding14
+// @autonote/del-invite/hyperdb#12
+const encoding19 = encoding18
 
 function setVersion (v) {
   version = v
@@ -533,22 +755,26 @@ function getEnum (name) {
 
 function getEncoding (name) {
   switch (name) {
-    case '@autonote/profile': return encoding0
-    case '@autonote/group': return encoding1
-    case '@autonote/page': return encoding2
-    case '@autonote/fileref': return encoding3
-    case '@autonote/writer': return encoding4
-    case '@autonote/delete': return encoding5
-    case '@autonote/del-invite': return encoding6
-    case '@autonote/invite': return encoding7
-    case '@autonote/profile/hyperdb#0': return encoding8
-    case '@autonote/group/hyperdb#1': return encoding9
-    case '@autonote/page/hyperdb#2': return encoding10
-    case '@autonote/fileref/hyperdb#3': return encoding11
-    case '@autonote/invite/hyperdb#4': return encoding12
-    case '@autonote/writer/hyperdb#5': return encoding13
-    case '@autonote/delete/hyperdb#6': return encoding14
-    case '@autonote/del-invite/hyperdb#7': return encoding15
+    case '@autonote/block': return encoding0
+    case '@autonote/operation': return encoding1
+    case '@autonote/profile': return encoding2
+    case '@autonote/group': return encoding3
+    case '@autonote/page': return encoding4
+    case '@autonote/fileref': return encoding5
+    case '@autonote/writer': return encoding6
+    case '@autonote/delete': return encoding7
+    case '@autonote/del-invite': return encoding8
+    case '@autonote/invite': return encoding9
+    case '@autonote/block/hyperdb#0': return encoding10
+    case '@autonote/operation/hyperdb#1': return encoding11
+    case '@autonote/profile/hyperdb#5': return encoding12
+    case '@autonote/group/hyperdb#6': return encoding13
+    case '@autonote/page/hyperdb#7': return encoding14
+    case '@autonote/fileref/hyperdb#8': return encoding15
+    case '@autonote/invite/hyperdb#9': return encoding16
+    case '@autonote/writer/hyperdb#10': return encoding17
+    case '@autonote/delete/hyperdb#11': return encoding18
+    case '@autonote/del-invite/hyperdb#12': return encoding19
     default: throw new Error('Encoder not found ' + name)
   }
 }

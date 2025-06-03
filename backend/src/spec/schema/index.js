@@ -10,8 +10,122 @@ const VERSION = 2
 // eslint-disable-next-line no-unused-vars
 let version = VERSION
 
-// @autonote/profile
+// @autonote/block
 const encoding0 = {
+  preencode (state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.pageId)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.parentId) c.string.preencode(state, m.parentId)
+    c.string.preencode(state, m.type)
+    if (m.content) c.string.preencode(state, m.content)
+    if (m.metadata) c.string.preencode(state, m.metadata)
+    c.int.preencode(state, m.position)
+    c.int.preencode(state, m.createdAt)
+    c.int.preencode(state, m.updatedAt)
+    c.string.preencode(state, m.createdBy)
+    c.string.preencode(state, m.updatedBy)
+    c.int.preencode(state, m.version)
+  },
+  encode (state, m) {
+    const flags =
+      (m.parentId ? 1 : 0) |
+      (m.content ? 2 : 0) |
+      (m.metadata ? 4 : 0)
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.pageId)
+    c.uint.encode(state, flags)
+
+    if (m.parentId) c.string.encode(state, m.parentId)
+    c.string.encode(state, m.type)
+    if (m.content) c.string.encode(state, m.content)
+    if (m.metadata) c.string.encode(state, m.metadata)
+    c.int.encode(state, m.position)
+    c.int.encode(state, m.createdAt)
+    c.int.encode(state, m.updatedAt)
+    c.string.encode(state, m.createdBy)
+    c.string.encode(state, m.updatedBy)
+    c.int.encode(state, m.version)
+  },
+  decode (state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      pageId: r1,
+      parentId: (flags & 1) !== 0 ? c.string.decode(state) : null,
+      type: c.string.decode(state),
+      content: (flags & 2) !== 0 ? c.string.decode(state) : null,
+      metadata: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      position: c.int.decode(state),
+      createdAt: c.int.decode(state),
+      updatedAt: c.int.decode(state),
+      createdBy: c.string.decode(state),
+      updatedBy: c.string.decode(state),
+      version: c.int.decode(state)
+    }
+  }
+}
+
+// @autonote/operation
+const encoding1 = {
+  preencode (state, m) {
+    c.string.preencode(state, m.id)
+    c.string.preencode(state, m.blockId)
+    c.string.preencode(state, m.type)
+    state.end++ // max flag is 4 so always one byte
+
+    if (m.position) c.int.preencode(state, m.position)
+    if (m.length) c.int.preencode(state, m.length)
+    if (m.value) c.string.preencode(state, m.value)
+    c.int.preencode(state, m.timestamp)
+    c.string.preencode(state, m.author)
+    c.int.preencode(state, m.baseVersion)
+  },
+  encode (state, m) {
+    const flags =
+      (m.position ? 1 : 0) |
+      (m.length ? 2 : 0) |
+      (m.value ? 4 : 0)
+
+    c.string.encode(state, m.id)
+    c.string.encode(state, m.blockId)
+    c.string.encode(state, m.type)
+    c.uint.encode(state, flags)
+
+    if (m.position) c.int.encode(state, m.position)
+    if (m.length) c.int.encode(state, m.length)
+    if (m.value) c.string.encode(state, m.value)
+    c.int.encode(state, m.timestamp)
+    c.string.encode(state, m.author)
+    c.int.encode(state, m.baseVersion)
+  },
+  decode (state) {
+    const r0 = c.string.decode(state)
+    const r1 = c.string.decode(state)
+    const r2 = c.string.decode(state)
+    const flags = c.uint.decode(state)
+
+    return {
+      id: r0,
+      blockId: r1,
+      type: r2,
+      position: (flags & 1) !== 0 ? c.int.decode(state) : 0,
+      length: (flags & 2) !== 0 ? c.int.decode(state) : 0,
+      value: (flags & 4) !== 0 ? c.string.decode(state) : null,
+      timestamp: c.int.decode(state),
+      author: c.string.decode(state),
+      baseVersion: c.int.decode(state)
+    }
+  }
+}
+
+// @autonote/profile
+const encoding2 = {
   preencode (state, m) {
     c.string.preencode(state, m.userId)
     c.string.preencode(state, m.displayName)
@@ -53,7 +167,7 @@ const encoding0 = {
 }
 
 // @autonote/group
-const encoding1 = {
+const encoding3 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
     c.string.preencode(state, m.name)
@@ -99,7 +213,7 @@ const encoding1 = {
 }
 
 // @autonote/page
-const encoding2 = {
+const encoding4 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
     c.string.preencode(state, m.title)
@@ -147,7 +261,7 @@ const encoding2 = {
 }
 
 // @autonote/fileref
-const encoding3 = {
+const encoding5 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
     c.string.preencode(state, m.pageId)
@@ -198,7 +312,7 @@ const encoding3 = {
 }
 
 // @autonote/writer
-const encoding4 = {
+const encoding6 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.key)
   },
@@ -215,7 +329,7 @@ const encoding4 = {
 }
 
 // @autonote/delete
-const encoding5 = {
+const encoding7 = {
   preencode (state, m) {
     c.string.preencode(state, m.id)
   },
@@ -232,7 +346,7 @@ const encoding5 = {
 }
 
 // @autonote/del-invite
-const encoding6 = {
+const encoding8 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.id)
   },
@@ -249,7 +363,7 @@ const encoding6 = {
 }
 
 // @autonote/invite
-const encoding7 = {
+const encoding9 = {
   preencode (state, m) {
     c.buffer.preencode(state, m.id)
     c.buffer.preencode(state, m.invite)
@@ -299,14 +413,16 @@ function getEnum (name) {
 
 function getEncoding (name) {
   switch (name) {
-    case '@autonote/profile': return encoding0
-    case '@autonote/group': return encoding1
-    case '@autonote/page': return encoding2
-    case '@autonote/fileref': return encoding3
-    case '@autonote/writer': return encoding4
-    case '@autonote/delete': return encoding5
-    case '@autonote/del-invite': return encoding6
-    case '@autonote/invite': return encoding7
+    case '@autonote/block': return encoding0
+    case '@autonote/operation': return encoding1
+    case '@autonote/profile': return encoding2
+    case '@autonote/group': return encoding3
+    case '@autonote/page': return encoding4
+    case '@autonote/fileref': return encoding5
+    case '@autonote/writer': return encoding6
+    case '@autonote/delete': return encoding7
+    case '@autonote/del-invite': return encoding8
+    case '@autonote/invite': return encoding9
     default: throw new Error('Encoder not found ' + name)
   }
 }

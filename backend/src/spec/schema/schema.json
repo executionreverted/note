@@ -2,6 +2,148 @@
   "version": 2,
   "schema": [
     {
+      "name": "block",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": 2,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "pageId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "parentId",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "type",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "content",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "metadata",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "position",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "createdBy",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "updatedBy",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "version",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "operation",
+      "namespace": "autonote",
+      "compact": false,
+      "flagsPosition": 3,
+      "fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "blockId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "type",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "position",
+          "required": false,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "length",
+          "required": false,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "value",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "timestamp",
+          "required": true,
+          "type": "int",
+          "version": 1
+        },
+        {
+          "name": "author",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "baseVersion",
+          "required": true,
+          "type": "int",
+          "version": 1
+        }
+      ]
+    },
+    {
       "name": "profile",
       "namespace": "autonote",
       "compact": false,

@@ -6,6 +6,102 @@ const Hyperdispatch = require('hyperdispatch')
 const autonote = Hyperschema.from('./spec/schema')
 const template = autonote.namespace('autonote')
 
+template.register({
+  name: 'block',
+  compact: false,
+  fields: [{
+    name: 'id',
+    type: 'string',
+    required: true
+  }, {
+    name: 'pageId',
+    type: 'string',
+    required: true
+  }, {
+    name: 'parentId', // For nesting blocks
+    type: 'string',
+    required: false
+  }, {
+    name: 'type', // paragraph, heading, list, code, etc.
+    type: 'string',
+    required: true
+  }, {
+    name: 'content',
+    type: 'string',
+    required: false
+  }, {
+    name: 'metadata', // JSON stringified properties specific to block type
+    type: 'string',
+    required: false
+  }, {
+    name: 'position', // For ordering blocks
+    type: 'int',
+    required: true
+  }, {
+    name: 'createdAt',
+    type: 'int',
+    required: true
+  }, {
+    name: 'updatedAt',
+    type: 'int',
+    required: true
+  }, {
+    name: 'createdBy',
+    type: 'string',
+    required: true
+  }, {
+    name: 'updatedBy',
+    type: 'string',
+    required: true
+  }, {
+    name: 'version',
+    type: 'int',
+    required: true
+  }]
+})
+
+template.register({
+  name: 'operation',
+  compact: false,
+  fields: [{
+    name: 'id',
+    type: 'string',
+    required: true
+  }, {
+    name: 'blockId',
+    type: 'string',
+    required: true
+  }, {
+    name: 'type', // insert, delete, update, move
+    type: 'string',
+    required: true
+  }, {
+    name: 'position', // Start position for text operations
+    type: 'int',
+    required: false
+  }, {
+    name: 'length', // Length of affected text
+    type: 'int',
+    required: false
+  }, {
+    name: 'value', // Text to insert or new values
+    type: 'string',
+    required: false
+  }, {
+    name: 'timestamp',
+    type: 'int',
+    required: true
+  }, {
+    name: 'author',
+    type: 'string',
+    required: true
+  }, {
+    name: 'baseVersion',
+    type: 'int', // Block version this op was based on
+    required: true
+  }]
+})
+
 // User profile schema
 template.register({
   name: 'profile',
@@ -173,6 +269,29 @@ template.register({
 })
 
 template.register({
+  name: 'invite',
+  compact: false,
+  fields: [{
+    name: 'id',
+    type: 'buffer',
+    required: true
+  }, {
+    name: 'invite',
+    type: 'buffer',
+    required: true
+  }, {
+    name: 'publicKey',
+    type: 'buffer',
+    required: true
+  }, {
+    name: 'expires',
+    type: 'int',
+    required: true
+  }
+  ]
+})
+
+template.register({
   name: 'del-invite',
   compact: false,
   fields: [{
@@ -188,7 +307,39 @@ Hyperschema.toDisk(autonote)
 const dbTemplate = HyperdbBuilder.from('./spec/schema', './spec/db')
 const noteDB = dbTemplate.namespace('autonote')
 
+
 // Define collections
+noteDB.collections.register({
+  name: 'blocks',
+  schema: '@autonote/block',
+  key: ['id']
+})
+
+noteDB.collections.register({
+  name: 'operations',
+  schema: '@autonote/operation',
+  key: ['id']
+})
+
+// Define indexes
+noteDB.indexes.register({
+  name: 'blocks-by-page',
+  collection: '@autonote/blocks',
+  key: ['pageId']
+})
+
+noteDB.indexes.register({
+  name: 'blocks-by-parent',
+  collection: '@autonote/blocks',
+  key: ['parentId']
+})
+
+noteDB.indexes.register({
+  name: 'operations-by-block',
+  collection: '@autonote/operations',
+  key: ['blockId']
+})
+
 noteDB.collections.register({
   name: 'profile',
   schema: '@autonote/profile',
@@ -305,6 +456,27 @@ namespace.register({
 namespace.register({
   name: 'del-invite',
   requestType: '@autonote/invite'
+})
+
+
+namespace.register({
+  name: 'create-block',
+  requestType: '@autonote/block'
+})
+
+namespace.register({
+  name: 'update-block',
+  requestType: '@autonote/block'
+})
+
+namespace.register({
+  name: 'delete-block',
+  requestType: '@autonote/block'
+})
+
+namespace.register({
+  name: 'apply-operation',
+  requestType: '@autonote/operation'
 })
 
 Hyperdispatch.toDisk(hyperdispatch)

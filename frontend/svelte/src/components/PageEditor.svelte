@@ -4,6 +4,7 @@
   import { storeActions, currentPage } from "../lib/stores";
   import type { Page } from "../lib/ipc";
   import { ipc } from "../lib/ipc";
+  import BlockEditor from "./BlockEditor.svelte";
 
   export let page: Page;
 
@@ -20,7 +21,8 @@
   let lastKnownVersion = 0;
   let showConflictDialog = false;
   let conflictData = null;
-
+  let showBlockEditor = false;
+  let isMigrating = false;
   // Watch for external updates to currentPage
   $: if (
     $currentPage &&
@@ -47,7 +49,22 @@
     }, 30000);
   }
 
-  function loadPageContent(pageData: Page) {
+  async function migrateToBlocks() {
+    if (!page || !page.id) return;
+
+    isMigrating = true;
+    try {
+      await storeActions.migratePageToBlocks(page.id);
+      showBlockEditor = true;
+    } catch (error) {
+      console.error("Failed to migrate page:", error);
+      alert("Failed to migrate page to blocks.");
+    } finally {
+      isMigrating = false;
+    }
+  }
+
+  async function loadPageContent(pageData: Page) {
     if (!pageData) return;
 
     title = pageData.title;
@@ -59,6 +76,15 @@
     hasUnsavedChanges = false;
     isEditing = false;
     clearTimeout(saveTimeout);
+
+    showBlockEditor = true;
+
+    // Check if page has blocks (if not, migrate them)
+    const blocks = await storeActions.getBlocksByPage(pageData.id);
+    if (blocks.length === 0) {
+      // Auto-migrate to blocks
+      await storeActions.migratePageToBlocks(pageData.id);
+    }
   }
 
   function markDirty() {
@@ -335,26 +361,48 @@
     </div>
   </div>
 
-  <!-- Content Editor -->
-  <div class="editor-content">
-    <div class="editor-pane">
-      <textarea
-        id="content-editor"
-        bind:value={content}
-        on:input={markDirty}
-        on:focus={startEditing}
-        on:blur={stopEditing}
-        placeholder="Start writing your note..."
-        class="content-textarea"
-      ></textarea>
-    </div>
+  {#if showBlockEditor}
+    <!-- Block Editor -->
+    <BlockEditor pageId={page.id} readOnly={false} />
+  {:else}
+    <!-- Original content editor -->
+    <div class="editor-content">
+      <!-- Content Editor -->
+      <div class="editor-content">
+        <div class="editor-pane">
+          <textarea
+            id="content-editor"
+            bind:value={content}
+            on:input={markDirty}
+            on:focus={startEditing}
+            on:blur={stopEditing}
+            placeholder="Start writing your note..."
+            class="content-textarea"
+          ></textarea>
+        </div>
 
-    <div class="preview-pane">
-      <div class="preview-content">
-        {@html renderMarkdown(content)}
+        <div class="preview-pane">
+          <div class="preview-content">
+            {@html renderMarkdown(content)}
+          </div>
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- Add migration button -->
+    <div class="migration-banner">
+      <p>
+        This page uses the legacy editor. Migrate to the new block-based editor?
+      </p>
+      <button
+        class="btn-primary"
+        on:click={migrateToBlocks}
+        disabled={isMigrating}
+      >
+        {isMigrating ? "Migrating..." : "Migrate to Blocks"}
+      </button>
+    </div>
+  {/if}
 
   <!-- Status -->
   <div class="editor-status">
@@ -742,6 +790,22 @@
     gap: 1rem;
     justify-content: flex-end;
     border-top: 1px solid #e0e0e0;
+  }
+
+  .migration-banner {
+    padding: 0.75rem;
+    margin: 1rem;
+    background-color: #f0f7ff;
+    border: 1px solid #4a90e2;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .migration-banner p {
+    margin: 0;
+    color: #333;
   }
 </style>
 

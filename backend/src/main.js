@@ -121,6 +121,8 @@ class Autonote extends ReadyResource {
     this.debug = !!opts.key
     this.lastEmittedHashes = new Map() // Track emitted data to prevent duplicate events
 
+    this.blockManager = null;
+    this.blockSyncManager = null;
     this._registerHandlers()
     this._boot(opts)
     this.ready().catch(noop)
@@ -209,6 +211,57 @@ class Autonote extends ReadyResource {
     this.router.add('@autonote/del-invite', async (data, context) => {
       await context.view.delete('@autonote/invite', { id: data.id })
     })
+    // Block operations
+    this.router.add('@autonote/create-block', async (data, context) => {
+      await context.view.insert('@autonote/blocks', data);
+      this._emitBlockCreated(data);
+    });
+
+    this.router.add('@autonote/update-block', async (data, context) => {
+      await context.view.insert('@autonote/blocks', data);
+      this._emitBlockUpdated(data);
+    });
+
+    this.router.add('@autonote/delete-block', async (data, context) => {
+      // Mark as deleted by updating type to '_deleted'
+      data.type = '_deleted';
+      await context.view.insert('@autonote/blocks', data);
+      this._emitBlockDeleted(data);
+    });
+
+    this.router.add('@autonote/apply-operation', async (data, context) => {
+      await context.view.insert('@autonote/operations', data);
+      this._emitOperationApplied(data);
+    });
+  }
+
+  _emitBlockCreated(data) {
+    const hash = this._getDataHash(data);
+    if (this.lastEmittedHashes.get(`block:created:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`block:created:${data.id}`, hash);
+      this.emit('block:created', data);
+    }
+  }
+
+  _emitBlockUpdated(data) {
+    const hash = this._getDataHash(data);
+    if (this.lastEmittedHashes.get(`block:updated:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`block:updated:${data.id}`, hash);
+      this.emit('block:updated', data);
+    }
+  }
+
+  _emitBlockDeleted(data) {
+    this.emit('block:deleted', { id: data.id });
+  }
+
+  _emitOperationApplied(data) {
+    const hash = this._getDataHash(data);
+    const key = `operation:applied:${data.blockId}:${data.id}`;
+    if (this.lastEmittedHashes.get(key) !== hash) {
+      this.lastEmittedHashes.set(key, hash);
+      this.emit('block:operation-applied', { operation: data });
+    }
   }
 
   // Event emission helpers to prevent duplicate events
@@ -297,6 +350,48 @@ class Autonote extends ReadyResource {
   async _open() {
     await this.base.ready()
     if (this.replicate) await this._replicate()
+  }
+
+  async _initBlockManager() {
+    if (!this.blockManager) {
+      const BlockManager = require('./blockManager');
+      this.blockManager = new BlockManager(this);
+    }
+    return this.blockManager;
+  }
+
+  async _initBlockSyncManager() {
+    if (!this.blockSyncManager) {
+      const BlockSyncManager = require('./blockSync');
+      this.blockSyncManager = new BlockSyncManager(this);
+
+      // Forward events
+      this.blockSyncManager.on('peer-status-change', (data) => {
+        this.emit('block-sync:peer-status-change', data);
+      });
+
+      this.blockSyncManager.on('editor-status-change', (data) => {
+        this.emit('block-sync:editor-status-change', data);
+      });
+
+      this.blockSyncManager.on('block-created', (data) => {
+        this.emit('block-sync:block-created', data);
+      });
+
+      this.blockSyncManager.on('block-updated', (data) => {
+        this.emit('block-sync:block-updated', data);
+      });
+
+      this.blockSyncManager.on('block-deleted', (data) => {
+        this.emit('block-sync:block-deleted', data);
+      });
+
+      this.blockSyncManager.on('operation-applied', (data) => {
+        this.emit('block-sync:operation-applied', data);
+      });
+    }
+
+    return this.blockSyncManager;
   }
 
   async _close() {
@@ -592,6 +687,80 @@ class Autonote extends ReadyResource {
       }
     })
     this.swarm.join(this.base.discoveryKey)
+  }
+
+
+  async getBlockManager() {
+    await this.ready();
+    return await this._initBlockManager();
+  }
+
+  async createBlock(pageId, type, content, options = {}) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.createBlock(pageId, type, content, options);
+  }
+
+  async updateBlock(id, updates) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.updateBlock(id, updates);
+  }
+
+  async deleteBlock(id) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.deleteBlock(id);
+  }
+
+  async getBlock(id) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.getBlock(id);
+  }
+
+  async getBlocksByPage(pageId) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.getBlocksByPage(pageId);
+  }
+
+  async applyBlockOperation(blockId, operation) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.applyOperation(blockId, operation);
+  }
+
+  async moveBlock(id, newPosition, newParentId) {
+    const blockManager = await this.getBlockManager();
+    return await blockManager.moveBlock(id, newPosition, newParentId);
+  }
+
+  async migratePageToBlocks(pageId) {
+    const page = await this.getPage(pageId);
+    if (!page) throw new Error('Page not found');
+
+    const blockManager = await this.getBlockManager();
+    return await blockManager.migratePageToBlocks(page);
+  }
+
+  async getBlockSyncManager() {
+    await this.ready();
+    return await this._initBlockSyncManager();
+  }
+
+  async registerActiveEditor(blockId, peerId) {
+    const syncManager = await this.getBlockSyncManager();
+    return syncManager.registerActiveEditor(blockId, peerId);
+  }
+
+  async unregisterActiveEditor(blockId, peerId) {
+    const syncManager = await this.getBlockSyncManager();
+    return syncManager.unregisterActiveEditor(blockId, peerId);
+  }
+
+  async getBlockSyncStatus(blockId) {
+    const syncManager = await this.getBlockSyncManager();
+    return {
+      version: syncManager.getBlockVersion(blockId),
+      activeEditors: syncManager.getActiveEditors(blockId),
+      hasPendingOperations: syncManager.hasPendingOperations(blockId),
+      connectionStatus: syncManager.getConnectionStatus()
+    };
   }
 }
 

@@ -1,3 +1,5 @@
+import type { Block, BlockOperation } from "./types"
+
 // frontend/svelte/src/lib/ipc.ts - Fixed version
 export interface Profile {
   userId: string
@@ -200,6 +202,39 @@ class IpcBridge {
 
   async removeWriter(key: string): Promise<void> {
     return await this.invoke('writer:remove', { key })
+  }
+
+  // frontend/svelte/src/lib/ipc.ts (add these methods)
+  async getBlocksByPage(pageId: string): Promise<Block[]> {
+    return await this.invoke('blocks:getByPage', { pageId });
+  }
+
+  async getBlock(id: string): Promise<Block | null> {
+    return await this.invoke('blocks:get', { id });
+  }
+
+  async createBlock(pageId: string, type: string, content: string, options: any = {}): Promise<Block> {
+    return await this.invoke('blocks:create', { pageId, type, content, options });
+  }
+
+  async updateBlock(id: string, updates: any): Promise<Block> {
+    return await this.invoke('blocks:update', { id, updates });
+  }
+
+  async deleteBlock(id: string): Promise<void> {
+    return await this.invoke('blocks:delete', { id });
+  }
+
+  async moveBlock(id: string, position: number, parentId?: string): Promise<Block> {
+    return await this.invoke('blocks:move', { id, position, parentId });
+  }
+
+  async applyBlockOperation(blockId: string, operation: BlockOperation): Promise<{ operation: any, block: Block }> {
+    return await this.invoke('blocks:applyOperation', { blockId, operation });
+  }
+
+  async migratePageToBlocks(pageId: string): Promise<Block[]> {
+    return await this.invoke('blocks:migrateFromPage', { pageId });
   }
 }
 

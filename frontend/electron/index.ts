@@ -164,6 +164,32 @@ ipcMain.handle('vault:open', async (event, { path }) => {
       sendToRenderer('vault:update', {})
     })
 
+
+    // Add event forwarders
+    currentAutonote.on('block-sync:peer-status-change', (data: any) => {
+      sendToRenderer('block-sync:peer-status-change', data);
+    });
+
+    currentAutonote.on('block-sync:editor-status-change', (data: any) => {
+      sendToRenderer('block-sync:editor-status-change', data);
+    });
+
+    currentAutonote.on('block-sync:block-created', (data: any) => {
+      sendToRenderer('block-sync:block-created', data);
+    });
+
+    currentAutonote.on('block-sync:block-updated', (data: any) => {
+      sendToRenderer('block-sync:block-updated', data);
+    });
+
+    currentAutonote.on('block-sync:block-deleted', (data: any) => {
+      sendToRenderer('block-sync:block-deleted', data);
+    });
+
+    currentAutonote.on('block-sync:operation-applied', (data: any) => {
+      sendToRenderer('block-sync:operation-applied', data);
+    });
+
     setupRealTimeSync(currentAutonote)
     return true
   } catch (error) {
@@ -335,11 +361,78 @@ ipcMain.handle('page:checkVersion', async (event, { id, lastKnownVersion }) => {
   }
 })
 
+ipcMain.handle('blocks:getByPage', async (event, { pageId }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  return await currentAutonote.getBlocksByPage(pageId);
+});
+
+ipcMain.handle('blocks:get', async (event, { id }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  return await currentAutonote.getBlock(id);
+});
+
+ipcMain.handle('blocks:create', async (event, { pageId, type, content, options }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  const block = await currentAutonote.createBlock(pageId, type, content, options);
+  sendToRenderer('block:created', block);
+  return block;
+});
+
+ipcMain.handle('blocks:update', async (event, { id, updates }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  const block = await currentAutonote.updateBlock(id, updates);
+  sendToRenderer('block:updated', block);
+  return block;
+});
+
+ipcMain.handle('blocks:delete', async (event, { id }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  await currentAutonote.deleteBlock(id);
+  sendToRenderer('block:deleted', { id });
+});
+
+ipcMain.handle('blocks:move', async (event, { id, position, parentId }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  const block = await currentAutonote.moveBlock(id, position, parentId);
+  sendToRenderer('block:moved', block);
+  return block;
+});
+
+ipcMain.handle('blocks:applyOperation', async (event, { blockId, operation }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  const result = await currentAutonote.applyBlockOperation(blockId, operation);
+  sendToRenderer('block:operation-applied', result);
+  return result;
+});
+
+ipcMain.handle('blocks:migrateFromPage', async (event, { pageId }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  const blocks = await currentAutonote.migratePageToBlocks(pageId);
+  sendToRenderer('page:migrated', { pageId, blockCount: blocks.length });
+  return blocks;
+});
+
 // Legacy test handler (can be removed)
 ipcMain.on('asynchronous-message', (event: IpcMainEvent, arg: string) => {
   console.log(arg)
   event.reply('asynchronous-reply', 'pong')
 })
+
+ipcMain.handle('block-sync:register-editor', async (event, { blockId, peerId }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  return await currentAutonote.registerActiveEditor(blockId, peerId);
+});
+
+ipcMain.handle('block-sync:unregister-editor', async (event, { blockId, peerId }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  return await currentAutonote.unregisterActiveEditor(blockId, peerId);
+});
+
+ipcMain.handle('block-sync:get-status', async (event, { blockId }) => {
+  if (!currentAutonote) throw new Error('No vault open');
+  return await currentAutonote.getBlockSyncStatus(blockId);
+});
+
 
 // HMR in dev mode
 if (process.env.ELECTRON_MODE === 'dev') {

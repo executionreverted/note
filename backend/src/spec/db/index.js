@@ -4,41 +4,41 @@
 const { IndexEncoder, c } = require('hyperdb/runtime')
 const { version, getEncoding, setVersion } = require('./messages.js')
 
-// '@autonote/profile' collection key
+// '@autonote/blocks' collection key
 const collection0_key = new IndexEncoder([
   IndexEncoder.STRING
 ], { prefix: 0 })
 
 function collection0_indexify (record) {
-  const a = record.userId
+  const a = record.id
   return a === undefined ? [] : [a]
 }
 
-// '@autonote/profile' value encoding
-const collection0_enc = getEncoding('@autonote/profile/hyperdb#0')
+// '@autonote/blocks' value encoding
+const collection0_enc = getEncoding('@autonote/block/hyperdb#0')
 
-// '@autonote/profile' reconstruction function
+// '@autonote/blocks' reconstruction function
 function collection0_reconstruct (version, keyBuf, valueBuf) {
   const key = collection0_key.decode(keyBuf)
   setVersion(version)
   const record = c.decode(collection0_enc, valueBuf)
-  record.userId = key[0]
+  record.id = key[0]
   return record
 }
-// '@autonote/profile' key reconstruction function
+// '@autonote/blocks' key reconstruction function
 function collection0_reconstruct_key (keyBuf) {
   const key = collection0_key.decode(keyBuf)
   return {
-    userId: key[0]
+    id: key[0]
   }
 }
 
-// '@autonote/profile'
+// '@autonote/blocks'
 const collection0 = {
-  name: '@autonote/profile',
+  name: '@autonote/blocks',
   id: 0,
   encodeKey (record) {
-    const key = [record.userId]
+    const key = [record.id]
     return collection0_key.encode(key)
   },
   encodeKeyRange ({ gt, lt, gte, lte } = {}) {
@@ -59,7 +59,7 @@ const collection0 = {
   indexes: []
 }
 
-// '@autonote/groups' collection key
+// '@autonote/operations' collection key
 const collection1_key = new IndexEncoder([
   IndexEncoder.STRING
 ], { prefix: 1 })
@@ -69,10 +69,10 @@ function collection1_indexify (record) {
   return a === undefined ? [] : [a]
 }
 
-// '@autonote/groups' value encoding
-const collection1_enc = getEncoding('@autonote/group/hyperdb#1')
+// '@autonote/operations' value encoding
+const collection1_enc = getEncoding('@autonote/operation/hyperdb#1')
 
-// '@autonote/groups' reconstruction function
+// '@autonote/operations' reconstruction function
 function collection1_reconstruct (version, keyBuf, valueBuf) {
   const key = collection1_key.decode(keyBuf)
   setVersion(version)
@@ -80,7 +80,7 @@ function collection1_reconstruct (version, keyBuf, valueBuf) {
   record.id = key[0]
   return record
 }
-// '@autonote/groups' key reconstruction function
+// '@autonote/operations' key reconstruction function
 function collection1_reconstruct_key (keyBuf) {
   const key = collection1_key.decode(keyBuf)
   return {
@@ -88,9 +88,9 @@ function collection1_reconstruct_key (keyBuf) {
   }
 }
 
-// '@autonote/groups'
+// '@autonote/operations'
 const collection1 = {
-  name: '@autonote/groups',
+  name: '@autonote/operations',
   id: 1,
   encodeKey (record) {
     const key = [record.id]
@@ -114,206 +114,176 @@ const collection1 = {
   indexes: []
 }
 
-// '@autonote/pages' collection key
-const collection2_key = new IndexEncoder([
+// '@autonote/blocks-by-page' collection key
+const index2_key = new IndexEncoder([
+  IndexEncoder.STRING,
   IndexEncoder.STRING
 ], { prefix: 2 })
 
-function collection2_indexify (record) {
-  const a = record.id
-  return a === undefined ? [] : [a]
+function index2_indexify (record) {
+  const arr = []
+
+  const a0 = record.pageId
+  if (a0 === undefined) return arr
+  arr.push(a0)
+
+  const a1 = record.id
+  if (a1 === undefined) return arr
+  arr.push(a1)
+
+  return arr
 }
 
-// '@autonote/pages' value encoding
-const collection2_enc = getEncoding('@autonote/page/hyperdb#2')
-
-// '@autonote/pages' reconstruction function
-function collection2_reconstruct (version, keyBuf, valueBuf) {
-  const key = collection2_key.decode(keyBuf)
-  setVersion(version)
-  const record = c.decode(collection2_enc, valueBuf)
-  record.id = key[0]
-  return record
-}
-// '@autonote/pages' key reconstruction function
-function collection2_reconstruct_key (keyBuf) {
-  const key = collection2_key.decode(keyBuf)
-  return {
-    id: key[0]
-  }
-}
-
-// '@autonote/pages'
-const collection2 = {
-  name: '@autonote/pages',
+// '@autonote/blocks-by-page'
+const index2 = {
+  name: '@autonote/blocks-by-page',
   id: 2,
   encodeKey (record) {
-    const key = [record.id]
-    return collection2_key.encode(key)
+    return index2_key.encode(index2_indexify(record))
   },
   encodeKeyRange ({ gt, lt, gte, lte } = {}) {
-    return collection2_key.encodeRange({
-      gt: gt ? collection2_indexify(gt) : null,
-      lt: lt ? collection2_indexify(lt) : null,
-      gte: gte ? collection2_indexify(gte) : null,
-      lte: lte ? collection2_indexify(lte) : null
+    return index2_key.encodeRange({
+      gt: gt ? index2_indexify(gt) : null,
+      lt: lt ? index2_indexify(lt) : null,
+      gte: gte ? index2_indexify(gte) : null,
+      lte: lte ? index2_indexify(lte) : null
     })
   },
-  encodeValue (version, record) {
-    setVersion(version)
-    return c.encode(collection2_enc, record)
+  encodeValue: (doc) => index2.collection.encodeKey(doc),
+  encodeIndexKeys (record, context) {
+    return [index2_key.encode([record.pageId, record.id])]
   },
-  trigger: null,
-  reconstruct: collection2_reconstruct,
-  reconstructKey: collection2_reconstruct_key,
-  indexes: []
+  reconstruct: (keyBuf, valueBuf) => valueBuf,
+  offset: collection0.indexes.length,
+  collection: collection0
 }
+collection0.indexes.push(index2)
 
-// '@autonote/filerefs' collection key
-const collection3_key = new IndexEncoder([
+// '@autonote/blocks-by-parent' collection key
+const index3_key = new IndexEncoder([
+  IndexEncoder.STRING,
   IndexEncoder.STRING
 ], { prefix: 3 })
 
-function collection3_indexify (record) {
-  const a = record.id
-  return a === undefined ? [] : [a]
+function index3_indexify (record) {
+  const arr = []
+
+  const a0 = record.parentId
+  if (a0 === undefined) return arr
+  arr.push(a0)
+
+  const a1 = record.id
+  if (a1 === undefined) return arr
+  arr.push(a1)
+
+  return arr
 }
 
-// '@autonote/filerefs' value encoding
-const collection3_enc = getEncoding('@autonote/fileref/hyperdb#3')
-
-// '@autonote/filerefs' reconstruction function
-function collection3_reconstruct (version, keyBuf, valueBuf) {
-  const key = collection3_key.decode(keyBuf)
-  setVersion(version)
-  const record = c.decode(collection3_enc, valueBuf)
-  record.id = key[0]
-  return record
-}
-// '@autonote/filerefs' key reconstruction function
-function collection3_reconstruct_key (keyBuf) {
-  const key = collection3_key.decode(keyBuf)
-  return {
-    id: key[0]
-  }
-}
-
-// '@autonote/filerefs'
-const collection3 = {
-  name: '@autonote/filerefs',
+// '@autonote/blocks-by-parent'
+const index3 = {
+  name: '@autonote/blocks-by-parent',
   id: 3,
   encodeKey (record) {
-    const key = [record.id]
-    return collection3_key.encode(key)
+    return index3_key.encode(index3_indexify(record))
   },
   encodeKeyRange ({ gt, lt, gte, lte } = {}) {
-    return collection3_key.encodeRange({
-      gt: gt ? collection3_indexify(gt) : null,
-      lt: lt ? collection3_indexify(lt) : null,
-      gte: gte ? collection3_indexify(gte) : null,
-      lte: lte ? collection3_indexify(lte) : null
+    return index3_key.encodeRange({
+      gt: gt ? index3_indexify(gt) : null,
+      lt: lt ? index3_indexify(lt) : null,
+      gte: gte ? index3_indexify(gte) : null,
+      lte: lte ? index3_indexify(lte) : null
     })
   },
-  encodeValue (version, record) {
-    setVersion(version)
-    return c.encode(collection3_enc, record)
+  encodeValue: (doc) => index3.collection.encodeKey(doc),
+  encodeIndexKeys (record, context) {
+    return [index3_key.encode([record.parentId, record.id])]
   },
-  trigger: null,
-  reconstruct: collection3_reconstruct,
-  reconstructKey: collection3_reconstruct_key,
-  indexes: []
+  reconstruct: (keyBuf, valueBuf) => valueBuf,
+  offset: collection0.indexes.length,
+  collection: collection0
 }
+collection0.indexes.push(index3)
 
-// '@autonote/invite' collection key
-const collection4_key = new IndexEncoder([
-  IndexEncoder.BUFFER
+// '@autonote/operations-by-block' collection key
+const index4_key = new IndexEncoder([
+  IndexEncoder.STRING,
+  IndexEncoder.STRING
 ], { prefix: 4 })
 
-function collection4_indexify (record) {
-  const a = record.id
-  return a === undefined ? [] : [a]
+function index4_indexify (record) {
+  const arr = []
+
+  const a0 = record.blockId
+  if (a0 === undefined) return arr
+  arr.push(a0)
+
+  const a1 = record.id
+  if (a1 === undefined) return arr
+  arr.push(a1)
+
+  return arr
 }
 
-// '@autonote/invite' value encoding
-const collection4_enc = getEncoding('@autonote/invite/hyperdb#4')
-
-// '@autonote/invite' reconstruction function
-function collection4_reconstruct (version, keyBuf, valueBuf) {
-  const key = collection4_key.decode(keyBuf)
-  setVersion(version)
-  const record = c.decode(collection4_enc, valueBuf)
-  record.id = key[0]
-  return record
-}
-// '@autonote/invite' key reconstruction function
-function collection4_reconstruct_key (keyBuf) {
-  const key = collection4_key.decode(keyBuf)
-  return {
-    id: key[0]
-  }
-}
-
-// '@autonote/invite'
-const collection4 = {
-  name: '@autonote/invite',
+// '@autonote/operations-by-block'
+const index4 = {
+  name: '@autonote/operations-by-block',
   id: 4,
   encodeKey (record) {
-    const key = [record.id]
-    return collection4_key.encode(key)
+    return index4_key.encode(index4_indexify(record))
   },
   encodeKeyRange ({ gt, lt, gte, lte } = {}) {
-    return collection4_key.encodeRange({
-      gt: gt ? collection4_indexify(gt) : null,
-      lt: lt ? collection4_indexify(lt) : null,
-      gte: gte ? collection4_indexify(gte) : null,
-      lte: lte ? collection4_indexify(lte) : null
+    return index4_key.encodeRange({
+      gt: gt ? index4_indexify(gt) : null,
+      lt: lt ? index4_indexify(lt) : null,
+      gte: gte ? index4_indexify(gte) : null,
+      lte: lte ? index4_indexify(lte) : null
     })
   },
-  encodeValue (version, record) {
-    setVersion(version)
-    return c.encode(collection4_enc, record)
+  encodeValue: (doc) => index4.collection.encodeKey(doc),
+  encodeIndexKeys (record, context) {
+    return [index4_key.encode([record.blockId, record.id])]
   },
-  trigger: null,
-  reconstruct: collection4_reconstruct,
-  reconstructKey: collection4_reconstruct_key,
-  indexes: []
+  reconstruct: (keyBuf, valueBuf) => valueBuf,
+  offset: collection1.indexes.length,
+  collection: collection1
 }
+collection1.indexes.push(index4)
 
-// '@autonote/writer' collection key
+// '@autonote/profile' collection key
 const collection5_key = new IndexEncoder([
-  IndexEncoder.BUFFER
+  IndexEncoder.STRING
 ], { prefix: 5 })
 
 function collection5_indexify (record) {
-  const a = record.key
+  const a = record.userId
   return a === undefined ? [] : [a]
 }
 
-// '@autonote/writer' value encoding
-const collection5_enc = getEncoding('@autonote/writer/hyperdb#5')
+// '@autonote/profile' value encoding
+const collection5_enc = getEncoding('@autonote/profile/hyperdb#5')
 
-// '@autonote/writer' reconstruction function
+// '@autonote/profile' reconstruction function
 function collection5_reconstruct (version, keyBuf, valueBuf) {
   const key = collection5_key.decode(keyBuf)
   setVersion(version)
   const record = c.decode(collection5_enc, valueBuf)
-  record.key = key[0]
+  record.userId = key[0]
   return record
 }
-// '@autonote/writer' key reconstruction function
+// '@autonote/profile' key reconstruction function
 function collection5_reconstruct_key (keyBuf) {
   const key = collection5_key.decode(keyBuf)
   return {
-    key: key[0]
+    userId: key[0]
   }
 }
 
-// '@autonote/writer'
+// '@autonote/profile'
 const collection5 = {
-  name: '@autonote/writer',
+  name: '@autonote/profile',
   id: 5,
   encodeKey (record) {
-    const key = [record.key]
+    const key = [record.userId]
     return collection5_key.encode(key)
   },
   encodeKeyRange ({ gt, lt, gte, lte } = {}) {
@@ -334,7 +304,7 @@ const collection5 = {
   indexes: []
 }
 
-// '@autonote/delete' collection key
+// '@autonote/groups' collection key
 const collection6_key = new IndexEncoder([
   IndexEncoder.STRING
 ], { prefix: 6 })
@@ -344,10 +314,10 @@ function collection6_indexify (record) {
   return a === undefined ? [] : [a]
 }
 
-// '@autonote/delete' value encoding
-const collection6_enc = getEncoding('@autonote/delete/hyperdb#6')
+// '@autonote/groups' value encoding
+const collection6_enc = getEncoding('@autonote/group/hyperdb#6')
 
-// '@autonote/delete' reconstruction function
+// '@autonote/groups' reconstruction function
 function collection6_reconstruct (version, keyBuf, valueBuf) {
   const key = collection6_key.decode(keyBuf)
   setVersion(version)
@@ -355,7 +325,7 @@ function collection6_reconstruct (version, keyBuf, valueBuf) {
   record.id = key[0]
   return record
 }
-// '@autonote/delete' key reconstruction function
+// '@autonote/groups' key reconstruction function
 function collection6_reconstruct_key (keyBuf) {
   const key = collection6_key.decode(keyBuf)
   return {
@@ -363,9 +333,9 @@ function collection6_reconstruct_key (keyBuf) {
   }
 }
 
-// '@autonote/delete'
+// '@autonote/groups'
 const collection6 = {
-  name: '@autonote/delete',
+  name: '@autonote/groups',
   id: 6,
   encodeKey (record) {
     const key = [record.id]
@@ -389,9 +359,9 @@ const collection6 = {
   indexes: []
 }
 
-// '@autonote/del-invite' collection key
+// '@autonote/pages' collection key
 const collection7_key = new IndexEncoder([
-  IndexEncoder.BUFFER
+  IndexEncoder.STRING
 ], { prefix: 7 })
 
 function collection7_indexify (record) {
@@ -399,10 +369,10 @@ function collection7_indexify (record) {
   return a === undefined ? [] : [a]
 }
 
-// '@autonote/del-invite' value encoding
-const collection7_enc = getEncoding('@autonote/del-invite/hyperdb#7')
+// '@autonote/pages' value encoding
+const collection7_enc = getEncoding('@autonote/page/hyperdb#7')
 
-// '@autonote/del-invite' reconstruction function
+// '@autonote/pages' reconstruction function
 function collection7_reconstruct (version, keyBuf, valueBuf) {
   const key = collection7_key.decode(keyBuf)
   setVersion(version)
@@ -410,7 +380,7 @@ function collection7_reconstruct (version, keyBuf, valueBuf) {
   record.id = key[0]
   return record
 }
-// '@autonote/del-invite' key reconstruction function
+// '@autonote/pages' key reconstruction function
 function collection7_reconstruct_key (keyBuf) {
   const key = collection7_key.decode(keyBuf)
   return {
@@ -418,9 +388,9 @@ function collection7_reconstruct_key (keyBuf) {
   }
 }
 
-// '@autonote/del-invite'
+// '@autonote/pages'
 const collection7 = {
-  name: '@autonote/del-invite',
+  name: '@autonote/pages',
   id: 7,
   encodeKey (record) {
     const key = [record.id]
@@ -444,38 +414,323 @@ const collection7 = {
   indexes: []
 }
 
+// '@autonote/filerefs' collection key
+const collection8_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 8 })
+
+function collection8_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@autonote/filerefs' value encoding
+const collection8_enc = getEncoding('@autonote/fileref/hyperdb#8')
+
+// '@autonote/filerefs' reconstruction function
+function collection8_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection8_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection8_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@autonote/filerefs' key reconstruction function
+function collection8_reconstruct_key (keyBuf) {
+  const key = collection8_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@autonote/filerefs'
+const collection8 = {
+  name: '@autonote/filerefs',
+  id: 8,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection8_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection8_key.encodeRange({
+      gt: gt ? collection8_indexify(gt) : null,
+      lt: lt ? collection8_indexify(lt) : null,
+      gte: gte ? collection8_indexify(gte) : null,
+      lte: lte ? collection8_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection8_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection8_reconstruct,
+  reconstructKey: collection8_reconstruct_key,
+  indexes: []
+}
+
+// '@autonote/invite' collection key
+const collection9_key = new IndexEncoder([
+  IndexEncoder.BUFFER
+], { prefix: 9 })
+
+function collection9_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@autonote/invite' value encoding
+const collection9_enc = getEncoding('@autonote/invite/hyperdb#9')
+
+// '@autonote/invite' reconstruction function
+function collection9_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection9_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection9_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@autonote/invite' key reconstruction function
+function collection9_reconstruct_key (keyBuf) {
+  const key = collection9_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@autonote/invite'
+const collection9 = {
+  name: '@autonote/invite',
+  id: 9,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection9_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection9_key.encodeRange({
+      gt: gt ? collection9_indexify(gt) : null,
+      lt: lt ? collection9_indexify(lt) : null,
+      gte: gte ? collection9_indexify(gte) : null,
+      lte: lte ? collection9_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection9_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection9_reconstruct,
+  reconstructKey: collection9_reconstruct_key,
+  indexes: []
+}
+
+// '@autonote/writer' collection key
+const collection10_key = new IndexEncoder([
+  IndexEncoder.BUFFER
+], { prefix: 10 })
+
+function collection10_indexify (record) {
+  const a = record.key
+  return a === undefined ? [] : [a]
+}
+
+// '@autonote/writer' value encoding
+const collection10_enc = getEncoding('@autonote/writer/hyperdb#10')
+
+// '@autonote/writer' reconstruction function
+function collection10_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection10_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection10_enc, valueBuf)
+  record.key = key[0]
+  return record
+}
+// '@autonote/writer' key reconstruction function
+function collection10_reconstruct_key (keyBuf) {
+  const key = collection10_key.decode(keyBuf)
+  return {
+    key: key[0]
+  }
+}
+
+// '@autonote/writer'
+const collection10 = {
+  name: '@autonote/writer',
+  id: 10,
+  encodeKey (record) {
+    const key = [record.key]
+    return collection10_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection10_key.encodeRange({
+      gt: gt ? collection10_indexify(gt) : null,
+      lt: lt ? collection10_indexify(lt) : null,
+      gte: gte ? collection10_indexify(gte) : null,
+      lte: lte ? collection10_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection10_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection10_reconstruct,
+  reconstructKey: collection10_reconstruct_key,
+  indexes: []
+}
+
+// '@autonote/delete' collection key
+const collection11_key = new IndexEncoder([
+  IndexEncoder.STRING
+], { prefix: 11 })
+
+function collection11_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@autonote/delete' value encoding
+const collection11_enc = getEncoding('@autonote/delete/hyperdb#11')
+
+// '@autonote/delete' reconstruction function
+function collection11_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection11_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection11_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@autonote/delete' key reconstruction function
+function collection11_reconstruct_key (keyBuf) {
+  const key = collection11_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@autonote/delete'
+const collection11 = {
+  name: '@autonote/delete',
+  id: 11,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection11_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection11_key.encodeRange({
+      gt: gt ? collection11_indexify(gt) : null,
+      lt: lt ? collection11_indexify(lt) : null,
+      gte: gte ? collection11_indexify(gte) : null,
+      lte: lte ? collection11_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection11_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection11_reconstruct,
+  reconstructKey: collection11_reconstruct_key,
+  indexes: []
+}
+
+// '@autonote/del-invite' collection key
+const collection12_key = new IndexEncoder([
+  IndexEncoder.BUFFER
+], { prefix: 12 })
+
+function collection12_indexify (record) {
+  const a = record.id
+  return a === undefined ? [] : [a]
+}
+
+// '@autonote/del-invite' value encoding
+const collection12_enc = getEncoding('@autonote/del-invite/hyperdb#12')
+
+// '@autonote/del-invite' reconstruction function
+function collection12_reconstruct (version, keyBuf, valueBuf) {
+  const key = collection12_key.decode(keyBuf)
+  setVersion(version)
+  const record = c.decode(collection12_enc, valueBuf)
+  record.id = key[0]
+  return record
+}
+// '@autonote/del-invite' key reconstruction function
+function collection12_reconstruct_key (keyBuf) {
+  const key = collection12_key.decode(keyBuf)
+  return {
+    id: key[0]
+  }
+}
+
+// '@autonote/del-invite'
+const collection12 = {
+  name: '@autonote/del-invite',
+  id: 12,
+  encodeKey (record) {
+    const key = [record.id]
+    return collection12_key.encode(key)
+  },
+  encodeKeyRange ({ gt, lt, gte, lte } = {}) {
+    return collection12_key.encodeRange({
+      gt: gt ? collection12_indexify(gt) : null,
+      lt: lt ? collection12_indexify(lt) : null,
+      gte: gte ? collection12_indexify(gte) : null,
+      lte: lte ? collection12_indexify(lte) : null
+    })
+  },
+  encodeValue (version, record) {
+    setVersion(version)
+    return c.encode(collection12_enc, record)
+  },
+  trigger: null,
+  reconstruct: collection12_reconstruct,
+  reconstructKey: collection12_reconstruct_key,
+  indexes: []
+}
+
 const collections = [
   collection0,
   collection1,
-  collection2,
-  collection3,
-  collection4,
   collection5,
   collection6,
-  collection7
+  collection7,
+  collection8,
+  collection9,
+  collection10,
+  collection11,
+  collection12
 ]
 
 const indexes = [
+  index2,
+  index3,
+  index4
 ]
 
 module.exports = { version, collections, indexes, resolveCollection, resolveIndex }
 
 function resolveCollection (name) {
   switch (name) {
-    case '@autonote/profile': return collection0
-    case '@autonote/groups': return collection1
-    case '@autonote/pages': return collection2
-    case '@autonote/filerefs': return collection3
-    case '@autonote/invite': return collection4
-    case '@autonote/writer': return collection5
-    case '@autonote/delete': return collection6
-    case '@autonote/del-invite': return collection7
+    case '@autonote/blocks': return collection0
+    case '@autonote/operations': return collection1
+    case '@autonote/profile': return collection5
+    case '@autonote/groups': return collection6
+    case '@autonote/pages': return collection7
+    case '@autonote/filerefs': return collection8
+    case '@autonote/invite': return collection9
+    case '@autonote/writer': return collection10
+    case '@autonote/delete': return collection11
+    case '@autonote/del-invite': return collection12
     default: return null
   }
 }
 
 function resolveIndex (name) {
   switch (name) {
+    case '@autonote/blocks-by-page': return index2
+    case '@autonote/blocks-by-parent': return index3
+    case '@autonote/operations-by-block': return index4
     default: return null
   }
 }

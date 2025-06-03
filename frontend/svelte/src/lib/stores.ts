@@ -2,6 +2,7 @@
 import { writable, derived } from 'svelte/store'
 import type { Profile, Group, Page, Vault } from './ipc'
 import { ipc } from './ipc'
+import type { Block, BlockOperation } from './types'
 
 // App state
 export const isVaultOpen = writable<boolean>(false)
@@ -314,6 +315,66 @@ export const storeActions = {
       return results
     }
     return []
+  },
+
+  async getBlocksByPage(pageId: string): Promise<Block[]> {
+    try {
+      return await ipc.getBlocksByPage(pageId);
+    } catch (error) {
+      console.error('Failed to get blocks:', error);
+      return [];
+    }
+  },
+
+  async getBlock(id: string): Promise<Block | null> {
+    return await ipc.getBlock(id);
+  },
+
+  async createBlock(pageId: string, type: string, content: string, options: any = {}): Promise<Block> {
+    syncStatus.set('syncing');
+    const block = await ipc.createBlock(pageId, type, content, options);
+    syncStatus.set('synced');
+    lastSyncTime.set(Date.now());
+    return block;
+  },
+
+  async updateBlock(id: string, updates: any): Promise<Block> {
+    syncStatus.set('syncing');
+    const updated = await ipc.updateBlock(id, updates);
+    syncStatus.set('synced');
+    lastSyncTime.set(Date.now());
+    return updated;
+  },
+
+  async deleteBlock(id: string): Promise<void> {
+    syncStatus.set('syncing');
+    await ipc.deleteBlock(id);
+    syncStatus.set('synced');
+    lastSyncTime.set(Date.now());
+  },
+
+  async moveBlock(id: string, position: number, parentId?: string): Promise<Block> {
+    syncStatus.set('syncing');
+    const updated = await ipc.moveBlock(id, position, parentId);
+    syncStatus.set('synced');
+    lastSyncTime.set(Date.now());
+    return updated;
+  },
+
+  async applyBlockOperation(blockId: string, operation: BlockOperation): Promise<{ operation: any, block: Block }> {
+    syncStatus.set('syncing');
+    const result = await ipc.applyBlockOperation(blockId, operation);
+    syncStatus.set('synced');
+    lastSyncTime.set(Date.now());
+    return result;
+  },
+
+  async migratePageToBlocks(pageId: string): Promise<Block[]> {
+    syncStatus.set('syncing');
+    const blocks = await ipc.migratePageToBlocks(pageId);
+    syncStatus.set('synced');
+    lastSyncTime.set(Date.now());
+    return blocks;
   }
 }
 

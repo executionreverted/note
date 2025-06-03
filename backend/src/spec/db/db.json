@@ -3,9 +3,73 @@
   "offset": 0,
   "schema": [
     {
-      "name": "profile",
+      "name": "blocks",
       "namespace": "autonote",
       "id": 0,
+      "type": 1,
+      "indexes": [
+        "@autonote/blocks-by-page",
+        "@autonote/blocks-by-parent"
+      ],
+      "schema": "@autonote/block",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "operations",
+      "namespace": "autonote",
+      "id": 1,
+      "type": 1,
+      "indexes": [
+        "@autonote/operations-by-block"
+      ],
+      "schema": "@autonote/operation",
+      "derived": false,
+      "key": [
+        "id"
+      ],
+      "trigger": null
+    },
+    {
+      "name": "blocks-by-page",
+      "namespace": "autonote",
+      "id": 2,
+      "type": 2,
+      "collection": "@autonote/blocks",
+      "unique": false,
+      "key": [
+        "pageId"
+      ]
+    },
+    {
+      "name": "blocks-by-parent",
+      "namespace": "autonote",
+      "id": 3,
+      "type": 2,
+      "collection": "@autonote/blocks",
+      "unique": false,
+      "key": [
+        "parentId"
+      ]
+    },
+    {
+      "name": "operations-by-block",
+      "namespace": "autonote",
+      "id": 4,
+      "type": 2,
+      "collection": "@autonote/operations",
+      "unique": false,
+      "key": [
+        "blockId"
+      ]
+    },
+    {
+      "name": "profile",
+      "namespace": "autonote",
+      "id": 5,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/profile",
@@ -18,7 +82,7 @@
     {
       "name": "groups",
       "namespace": "autonote",
-      "id": 1,
+      "id": 6,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/group",
@@ -31,7 +95,7 @@
     {
       "name": "pages",
       "namespace": "autonote",
-      "id": 2,
+      "id": 7,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/page",
@@ -44,7 +108,7 @@
     {
       "name": "filerefs",
       "namespace": "autonote",
-      "id": 3,
+      "id": 8,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/fileref",
@@ -57,7 +121,7 @@
     {
       "name": "invite",
       "namespace": "autonote",
-      "id": 4,
+      "id": 9,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/invite",
@@ -70,7 +134,7 @@
     {
       "name": "writer",
       "namespace": "autonote",
-      "id": 5,
+      "id": 10,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/writer",
@@ -83,7 +147,7 @@
     {
       "name": "delete",
       "namespace": "autonote",
-      "id": 6,
+      "id": 11,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/delete",
@@ -96,7 +160,7 @@
     {
       "name": "del-invite",
       "namespace": "autonote",
-      "id": 7,
+      "id": 12,
       "type": 1,
       "indexes": [],
       "schema": "@autonote/del-invite",
