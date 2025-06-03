@@ -1,7 +1,7 @@
 <!-- frontend/svelte/src/components/PageEditor.svelte -->
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from "svelte";
-  import { storeActions } from "../lib/stores";
+  import { storeActions, currentPage } from "../lib/stores";
   import type { Page } from "../lib/ipc";
   import { ipc } from "../lib/ipc";
 
@@ -21,9 +21,20 @@
   let showConflictDialog = false;
   let conflictData = null;
 
+  // Watch for external updates to currentPage
+  $: if (
+    $currentPage &&
+    $currentPage.id === currentPageId &&
+    $currentPage.updatedAt > lastKnownVersion
+  ) {
+    if (!hasUnsavedChanges) {
+      loadPageContent($currentPage);
+    }
+  }
+
   // Update local state when page prop changes
   $: if (page && page.id !== currentPageId) {
-    loadPageContent();
+    loadPageContent(page);
   }
 
   // Auto-save after 30 seconds of inactivity
@@ -36,15 +47,15 @@
     }, 30000);
   }
 
-  function loadPageContent() {
-    if (!page) return;
+  function loadPageContent(pageData: Page) {
+    if (!pageData) return;
 
-    title = page.title;
-    content = page.content || "";
-    tags = page.tags.join(", ");
-    starred = page.starred || false;
-    currentPageId = page.id;
-    lastKnownVersion = page.updatedAt;
+    title = pageData.title;
+    content = pageData.content || "";
+    tags = pageData.tags.join(", ");
+    starred = pageData.starred || false;
+    currentPageId = pageData.id;
+    lastKnownVersion = pageData.updatedAt;
     hasUnsavedChanges = false;
     isEditing = false;
     clearTimeout(saveTimeout);
@@ -221,7 +232,7 @@
 
   onMount(() => {
     if (page) {
-      loadPageContent();
+      loadPageContent(page);
     }
   });
 

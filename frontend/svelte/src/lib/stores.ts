@@ -266,7 +266,7 @@ export const storeActions = {
     return page
   },
 
-  async updatePage(id: string, updates: Partial<Page>) {
+  async updatePage(id: string, updates: Partial<Page>, baseVersion?: number) {
     syncStatus.set('syncing')
     const updated = await ipc.updatePage(id, updates)
 
@@ -380,7 +380,12 @@ ipc.on('page:updated', (data: Page) => {
   })
 
   if (currentPageId === data.id) {
-    currentPage.set(data)
+    currentPage.update(current => {
+      if (current && current.id === data.id) {
+        return { ...data }
+      }
+      return current
+    })
   }
 
   showToast(`Page "${data.title}" updated by peer`, 'info')
