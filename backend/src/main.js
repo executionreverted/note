@@ -1,4 +1,4 @@
-// backend/src/main.js - Updated with version control
+// backend/src/main.js - Updated with better event handling
 const Autobase = require('autobase')
 const BlindPairing = require('blind-pairing')
 const HyperDB = require('hyperdb')
@@ -119,6 +119,7 @@ class Autonote extends ReadyResource {
     this.pairing = null
     this.replicate = opts.replicate !== false
     this.debug = !!opts.key
+    this.lastEmittedHashes = new Map() // Track emitted data to prevent duplicate events
 
     this._registerHandlers()
     this._boot(opts)
@@ -138,19 +139,23 @@ class Autonote extends ReadyResource {
     // Profile operations
     this.router.add('@autonote/update-profile', async (data, context) => {
       await context.view.insert('@autonote/profile', data)
+      this._emitProfileUpdate(data)
     })
 
     // Group operations
     this.router.add('@autonote/create-group', async (data, context) => {
       await context.view.insert('@autonote/groups', data)
+      this._emitGroupCreated(data)
     })
 
     this.router.add('@autonote/update-group', async (data, context) => {
       await context.view.insert('@autonote/groups', data)
+      this._emitGroupUpdated(data)
     })
 
     this.router.add('@autonote/delete-group', async (data, context) => {
       await context.view.delete('@autonote/groups', { id: data.id })
+      this._emitGroupDeleted(data)
     })
 
     // Version-aware page operations
@@ -162,38 +167,29 @@ class Autonote extends ReadyResource {
         authorKey: context.base.local?.key?.toString('hex').slice(0, 8) || 'unknown'
       }
       await context.view.insert('@autonote/pages', versionedData)
+
+      // Emit clean data without version metadata
+      const { version, authorKey, baseVersion, ...cleanData } = data
+      const pageData = { ...cleanData, tags: JSON.parse(cleanData.tags || '[]') }
+      this._emitPageCreated(pageData)
     })
 
     this.router.add('@autonote/update-page', async (data, context) => {
-      // Check for version conflicts before updating
-      const existing = await context.view.get('@autonote/pages', { id: data.id })
-      const authorKey = context.base.local?.key?.toString('hex').slice(0, 8) || 'unknown'
-
-      if (existing && data.baseVersion && existing.version > data.baseVersion) {
-        // Version conflict detected - still save but mark as conflict
-        console.log('Version conflict detected for page:', data.id)
-        const conflictData = {
-          ...data,
-          version: data.updatedAt,
-          authorKey,
-          conflictWith: existing.version,
-          hasConflict: true
-        }
-        await context.view.insert('@autonote/pages', conflictData)
-      } else {
-        // No conflict, normal update
-        const versionedData = {
-          ...data,
-          version: data.updatedAt,
-          authorKey,
-          hasConflict: false
-        }
-        await context.view.insert('@autonote/pages', versionedData)
+      const versionedData = {
+        ...data,
+        version: data.updatedAt,
+        authorKey: context.base.local?.key?.toString('hex').slice(0, 8) || 'unknown'
       }
+      await context.view.insert('@autonote/pages', versionedData)
+
+      const { version, authorKey, baseVersion, ...cleanData } = data
+      const pageData = { ...cleanData, tags: JSON.parse(cleanData.tags || '[]') }
+      this._emitPageUpdated(pageData)
     })
 
     this.router.add('@autonote/delete-page', async (data, context) => {
       await context.view.delete('@autonote/pages', { id: data.id })
+      this._emitPageDeleted(data)
     })
 
     // File reference operations
@@ -215,6 +211,59 @@ class Autonote extends ReadyResource {
     })
   }
 
+  // Event emission helpers to prevent duplicate events
+  _emitProfileUpdate(data) {
+    const hash = this._getDataHash(data)
+    if (this.lastEmittedHashes.get('profile') !== hash) {
+      this.lastEmittedHashes.set('profile', hash)
+      this.emit('profile:updated', data)
+    }
+  }
+
+  _emitGroupCreated(data) {
+    const hash = this._getDataHash(data)
+    if (this.lastEmittedHashes.get(`group:created:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`group:created:${data.id}`, hash)
+      this.emit('group:created', data)
+    }
+  }
+
+  _emitGroupUpdated(data) {
+    const hash = this._getDataHash(data)
+    if (this.lastEmittedHashes.get(`group:updated:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`group:updated:${data.id}`, hash)
+      this.emit('group:updated', data)
+    }
+  }
+
+  _emitGroupDeleted(data) {
+    this.emit('group:deleted', data)
+  }
+
+  _emitPageCreated(data) {
+    const hash = this._getDataHash(data)
+    if (this.lastEmittedHashes.get(`page:created:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`page:created:${data.id}`, hash)
+      this.emit('page:created', data)
+    }
+  }
+
+  _emitPageUpdated(data) {
+    const hash = this._getDataHash(data)
+    if (this.lastEmittedHashes.get(`page:updated:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`page:updated:${data.id}`, hash)
+      this.emit('page:updated', data)
+    }
+  }
+
+  _emitPageDeleted(data) {
+    this.emit('page:deleted', data)
+  }
+
+  _getDataHash(data) {
+    return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex').slice(0, 16)
+  }
+
   _boot(opts = {}) {
     const { encryptionKey, key } = opts
 
@@ -231,7 +280,10 @@ class Autonote extends ReadyResource {
     })
 
     this.base.on('update', () => {
-      if (!this.base._interrupting) this.emit('update')
+      if (!this.base._interrupting) {
+        console.log('Autobase update detected - peer changes')
+        this.emit('update')
+      }
     })
   }
 
@@ -294,6 +346,7 @@ class Autonote extends ReadyResource {
     }
 
     await this.base.append(dispatch('@autonote/update-profile', data))
+    return data
   }
 
   // Group methods
@@ -373,16 +426,12 @@ class Autonote extends ReadyResource {
       ...updates,
       id,
       tags: JSON.stringify(updates.tags !== undefined ? updates.tags : existing.tags),
-      updatedAt: now,
-      version: now,
-      baseVersion: baseVersion || existing.updatedAt
+      updatedAt: now
     }
 
     await this.base.append(dispatch('@autonote/update-page', page))
 
-    // Return without version metadata for frontend
-    const { baseVersion: _, authorKey, hasConflict, conflictWith, ...cleanPage } = page
-    return { ...cleanPage, tags: JSON.parse(cleanPage.tags) }
+    return { ...page, tags: JSON.parse(page.tags) }
   }
 
   async deletePage(id) {
@@ -392,7 +441,6 @@ class Autonote extends ReadyResource {
   async getPage(id) {
     const page = (await this.base.view.get('@autonote/pages', { id }))
     if (page) {
-      // Clean up version metadata for frontend
       const { version, authorKey, hasConflict, conflictWith, baseVersion, ...cleanPage } = page
       return { ...cleanPage, tags: JSON.parse(cleanPage.tags || '[]') }
     }
@@ -400,7 +448,6 @@ class Autonote extends ReadyResource {
   }
 
   async getPageWithVersion(id) {
-    // Internal method that returns full version info
     const page = (await this.base.view.get('@autonote/pages', { id }))
     if (page) {
       return { ...page, tags: JSON.parse(page.tags || '[]') }
@@ -516,7 +563,14 @@ class Autonote extends ReadyResource {
         bootstrap: this.bootstrap
       })
       this.swarm.on('connection', (connection, peerInfo) => {
+        console.log('Peer connected:', peerInfo.publicKey.toString('hex').slice(0, 8))
         this.store.replicate(connection)
+        this.emit('peer-connected', peerInfo)
+      })
+
+      this.swarm.on('disconnection', (connection, peerInfo) => {
+        console.log('Peer disconnected:', peerInfo.publicKey.toString('hex').slice(0, 8))
+        this.emit('peer-disconnected', peerInfo)
       })
     }
     this.pairing = new BlindPairing(this.swarm)
@@ -525,7 +579,7 @@ class Autonote extends ReadyResource {
       onadd: async (candidate) => {
         const id = candidate.inviteId
         const inv = await this.base.view.findOne('@autonote/invite', {})
-        if (!b4a.equals(inv.id, id)) {
+        if (!inv || !b4a.equals(inv.id, id)) {
           return
         }
         candidate.open(inv.publicKey)
@@ -534,6 +588,7 @@ class Autonote extends ReadyResource {
           key: this.base.key,
           encryptionKey: this.base.encryptionKey
         })
+        console.log('New writer added via pairing')
       }
     })
     this.swarm.join(this.base.discoveryKey)

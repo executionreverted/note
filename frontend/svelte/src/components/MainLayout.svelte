@@ -121,7 +121,7 @@
         on:click={() => showStarredOnly.set(!$showStarredOnly)}
         title="Show starred only"
       >
-        fav
+        *
       </button>
     </div>
 
@@ -598,4 +598,3 @@
     background-color: #357abd;
   }
 </style>
-

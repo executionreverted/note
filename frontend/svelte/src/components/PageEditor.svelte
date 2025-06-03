@@ -1,7 +1,9 @@
+<!-- frontend/svelte/src/components/PageEditor.svelte -->
 <script lang="ts">
-  import { onMount, createEventDispatcher } from "svelte";
+  import { onMount, onDestroy, createEventDispatcher } from "svelte";
   import { storeActions } from "../lib/stores";
   import type { Page } from "../lib/ipc";
+  import { ipc } from "../lib/ipc";
 
   export let page: Page;
 
@@ -69,30 +71,6 @@
     if (!hasUnsavedChanges || !currentPageId) return;
 
     try {
-      // Check for conflicts using the store action
-      const versionCheck = await storeActions.checkPageVersion(
-        currentPageId,
-        lastKnownVersion,
-      );
-
-      if (versionCheck.hasConflict && versionCheck.page) {
-        // Conflict detected
-        conflictData = {
-          current: versionCheck.page,
-          ours: {
-            title: title.trim() || "Untitled",
-            content,
-            tags: tags
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter((tag) => tag.length > 0),
-            starred,
-          },
-        };
-        showConflictDialog = true;
-        return;
-      }
-
       await saveWithoutConflictCheck();
     } catch (error) {
       console.error("Failed to save page:", error);
@@ -128,7 +106,6 @@
 
     try {
       if (resolution === "keep-theirs") {
-        // Discard our changes, load their version
         title = conflictData.current.title;
         content = conflictData.current.content || "";
         tags = conflictData.current.tags.join(", ");
@@ -136,13 +113,11 @@
         lastKnownVersion = conflictData.current.updatedAt;
         hasUnsavedChanges = false;
       } else if (resolution === "keep-ours") {
-        // Save our version, overwriting theirs
         await saveWithoutConflictCheck();
       } else if (resolution === "merge") {
-        // Simple merge strategy: append their changes as comments
         const mergedContent =
           content +
-          "\n\n--- PEER CHANGES ---\n" +
+          "\n\n--- PEER CHANGES (merged) ---\n" +
           (conflictData.current.content || "");
 
         content = mergedContent;
@@ -248,10 +223,10 @@
     if (page) {
       loadPageContent();
     }
+  });
 
-    return () => {
-      clearTimeout(saveTimeout);
-    };
+  onDestroy(() => {
+    clearTimeout(saveTimeout);
   });
 </script>
 
@@ -280,7 +255,7 @@
         }}
         title={starred ? "Remove from favorites" : "Add to favorites"}
       >
-        {starred ? "STAR" : "UNSTAR"}
+        {starred ? "*" : " "}
       </button>
     </div>
 
@@ -402,7 +377,10 @@
             <strong>Title:</strong>
             {conflictData.ours.title}<br />
             <strong>Content:</strong>
-            {conflictData.ours.content.substring(0, 200)}...
+            {conflictData.ours.content.substring(0, 200)}{conflictData.ours
+              .content.length > 200
+              ? "..."
+              : ""}
           </div>
         </div>
 
@@ -412,7 +390,11 @@
             <strong>Title:</strong>
             {conflictData.current.title}<br />
             <strong>Content:</strong>
-            {conflictData.current.content?.substring(0, 200) || ""}...
+            {(conflictData.current.content || "").substring(0, 200)}{(
+              conflictData.current.content || ""
+            ).length > 200
+              ? "..."
+              : ""}
           </div>
         </div>
       </div>
@@ -479,7 +461,7 @@
   .star-btn {
     background: none;
     border: none;
-    font-size: 0.75rem;
+    font-size: 1.2rem;
     cursor: pointer;
     padding: 0.25rem;
     border-radius: 4px;

@@ -1,4 +1,4 @@
-// frontend/svelte/src/lib/stores.ts
+// frontend/svelte/src/lib/stores.ts - Fixed version
 import { writable, derived } from 'svelte/store'
 import type { Profile, Group, Page, Vault } from './ipc'
 import { ipc } from './ipc'
@@ -127,9 +127,6 @@ export const storeActions = {
   setupRealTimeSync() {
     console.log('Setting up real-time sync listeners')
 
-    ipc.off('vault:realtime-update', this.handleRealTimeUpdate)
-    ipc.off('vault:update', this.handleVaultUpdate)
-
     ipc.on('vault:realtime-update', this.handleRealTimeUpdate)
     ipc.on('vault:update', this.handleVaultUpdate)
   },
@@ -180,12 +177,11 @@ export const storeActions = {
       })
       pageVersions.set(versions)
 
-      // Force refresh current page if it was updated by peer
+      // Update current page if needed
       if (currentPageId) {
         const updatedCurrentPage = pagesData.find(p => p.id === currentPageId)
         if (updatedCurrentPage) {
           currentPage.set({ ...updatedCurrentPage })
-          console.log('Current page refreshed:', updatedCurrentPage.title, 'Content length:', updatedCurrentPage.content?.length)
         }
       }
     } catch (error) {
@@ -199,14 +195,12 @@ export const storeActions = {
     try {
       const page = await ipc.getPage(id)
       if (page) {
-        // Update version tracking
         pageVersions.update(versions => {
           const newVersions = new Map(versions)
           newVersions.set(id, page.updatedAt)
           return newVersions
         })
 
-        // Only update currentPage if it's the requested page
         if (currentPageId === id) {
           currentPage.set(page)
         }
@@ -215,17 +209,6 @@ export const storeActions = {
     } catch (error) {
       console.error('Failed to load page:', error)
       return null
-    }
-  },
-
-  // Check if page was modified by another user
-  async checkPageVersion(pageId: string, lastKnownVersion: number) {
-    try {
-      const result = await ipc.invoke('page:checkVersion', { id: pageId, lastKnownVersion })
-      return result
-    } catch (error) {
-      console.error('Failed to check page version:', error)
-      return { exists: false, error: error.message }
     }
   },
 
@@ -266,13 +249,12 @@ export const storeActions = {
     lastSyncTime.set(Date.now())
   },
 
-  // Version-aware page actions
+  // Page actions
   async createPage(title: string, content?: string, groupId?: string, options?: { tags?: string[], starred?: boolean }) {
     syncStatus.set('syncing')
     const page = await ipc.createPage(title, content, groupId, options)
     pages.update(items => [page, ...items])
 
-    // Track version
     pageVersions.update(versions => {
       const newVersions = new Map(versions)
       newVersions.set(page.id, page.updatedAt)
@@ -284,20 +266,18 @@ export const storeActions = {
     return page
   },
 
-  async updatePage(id: string, updates: Partial<Page>, baseVersion?: number) {
+  async updatePage(id: string, updates: Partial<Page>) {
     syncStatus.set('syncing')
-    const updated = await ipc.updatePage(id, updates, baseVersion)
+    const updated = await ipc.updatePage(id, updates)
 
     pages.update(items => items.map(item => item.id === id ? updated : item))
 
-    // Update version tracking
     pageVersions.update(versions => {
       const newVersions = new Map(versions)
       newVersions.set(id, updated.updatedAt)
       return newVersions
     })
 
-    // Update current page if it's the one being updated
     if (currentPageId === id) {
       currentPage.set(updated)
     }
@@ -312,14 +292,12 @@ export const storeActions = {
     await ipc.deletePage(id)
     pages.update(items => items.filter(item => item.id !== id))
 
-    // Remove from version tracking
     pageVersions.update(versions => {
       const newVersions = new Map(versions)
       newVersions.delete(id)
       return newVersions
     })
 
-    // Clear current page if it's the one being deleted
     if (currentPageId === id) {
       currentPage.set(null)
     }
@@ -339,7 +317,7 @@ export const storeActions = {
   }
 }
 
-// Enhanced entity update listeners with conflict awareness
+// Real-time event listeners
 ipc.on('profile:updated', (data: Profile) => {
   console.log('Profile updated by peer:', data.displayName)
   profile.set(data)
@@ -348,7 +326,13 @@ ipc.on('profile:updated', (data: Profile) => {
 
 ipc.on('group:created', (data: Group) => {
   console.log('Group created by peer:', data.name)
-  groups.update(items => [...items, data])
+  groups.update(items => {
+    const exists = items.some(item => item.id === data.id)
+    if (!exists) {
+      return [...items, data]
+    }
+    return items
+  })
   showToast(`Group "${data.name}" created by peer`, 'success')
 })
 
@@ -361,14 +345,20 @@ ipc.on('group:updated', (data: Group) => {
 ipc.on('group:deleted', (data: { id: string }) => {
   console.log('Group deleted by peer:', data.id)
   groups.update(items => items.filter(item => item.id !== data.id))
+  pages.update(items => items.filter(item => item.groupId !== data.id))
   showToast('Group deleted by peer', 'warning')
 })
 
 ipc.on('page:created', (data: Page) => {
   console.log('Page created by peer:', data.title)
-  pages.update(items => [data, ...items])
+  pages.update(items => {
+    const exists = items.some(item => item.id === data.id)
+    if (!exists) {
+      return [data, ...items]
+    }
+    return items
+  })
 
-  // Track version
   pageVersions.update(versions => {
     const newVersions = new Map(versions)
     newVersions.set(data.id, data.updatedAt)
@@ -381,35 +371,25 @@ ipc.on('page:created', (data: Page) => {
 ipc.on('page:updated', (data: Page) => {
   console.log('Page updated by peer:', data.title)
 
-  // Check if this is the currently open page
-  const isCurrentPage = currentPageId === data.id
-
   pages.update(items => items.map(item => item.id === data.id ? data : item))
 
-  // Update version tracking
   pageVersions.update(versions => {
     const newVersions = new Map(versions)
     newVersions.set(data.id, data.updatedAt)
     return newVersions
   })
 
-  // Only update current page if user is not actively editing
-  // The PageEditor component will handle conflict detection
-  if (isCurrentPage) {
-    // Don't automatically update currentPage here - let PageEditor handle it
-    // This prevents overwriting user's unsaved changes
-    console.log('Current page updated by peer - PageEditor will handle conflict detection')
-    showToast(`"${data.title}" was updated by peer`, 'warning')
-  } else {
-    showToast(`Page "${data.title}" updated by peer`, 'info')
+  if (currentPageId === data.id) {
+    currentPage.set(data)
   }
+
+  showToast(`Page "${data.title}" updated by peer`, 'info')
 })
 
 ipc.on('page:deleted', (data: { id: string }) => {
   console.log('Page deleted by peer:', data.id)
   pages.update(items => items.filter(item => item.id !== data.id))
 
-  // Remove from version tracking
   pageVersions.update(versions => {
     const newVersions = new Map(versions)
     newVersions.delete(data.id)

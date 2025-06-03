@@ -1,4 +1,4 @@
-// frontend/svelte/src/lib/ipc.ts
+// frontend/svelte/src/lib/ipc.ts - Fixed version
 export interface Profile {
   userId: string
   displayName: string
@@ -91,7 +91,8 @@ class IpcBridge {
     }
   }
 
-  private async invoke(channel: string, data?: any) {
+  // Make invoke method public for checkPageVersion
+  async invoke(channel: string, data?: any) {
     if (this.electronAPI?.invoke) {
       return await this.electronAPI.invoke(channel, data)
     }
@@ -172,6 +173,11 @@ class IpcBridge {
 
   async searchPages(searchTerm: string): Promise<Page[]> {
     return await this.invoke('page:search', { searchTerm })
+  }
+
+  // Version control helper
+  async checkPageVersion(id: string, lastKnownVersion: number) {
+    return await this.invoke('page:checkVersion', { id, lastKnownVersion })
   }
 
   // Invite methods
