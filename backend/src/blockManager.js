@@ -60,11 +60,14 @@ class BlockManager {
     const now = Date.now()
     const deletedBlock = {
       ...existing,
+      metadata: JSON.stringify(existing.metadata),
       type: '_deleted',
       updatedAt: now,
       updatedBy: this.autonote.writerKey?.toString('hex').slice(0, 8) || 'unknown',
       version: existing.version + 1
     }
+
+    console.log(deletedBlock)
 
     await this.autonote.base.append(dispatch('@autonote/update-block', deletedBlock))
   }

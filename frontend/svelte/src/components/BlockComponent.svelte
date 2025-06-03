@@ -15,7 +15,7 @@
   let contentElement: HTMLElement;
   let lastSavedContent = currentContent;
   let selectionPosition = 0;
-
+  let updateTimeout: ReturnType<typeof setTimeout>;
   $: blockClass = `block block-${block.type} ${isEditing ? "editing" : ""}`;
 
   // Update local state when block prop changes from external source
@@ -148,8 +148,8 @@
               value: indentChar,
             });
 
-            dispatch("update", { content: currentContent });
-            lastSavedContent = currentContent;
+            // dispatch("update", { content: currentContent });
+            // lastSavedContent = currentContent;
 
             // Update caret position
             setTimeout(() => {
@@ -225,17 +225,15 @@
     currentContent = newContent;
 
     // Mark as dirty if needed
-    if (currentContent !== lastSavedContent) {
-      // Debounce updates
-      clearTimeout(updateTimeout);
-      updateTimeout = setTimeout(() => {
-        dispatch("update", { content: currentContent });
-        lastSavedContent = currentContent;
-      }, 1000);
-    }
+    // if (currentContent !== lastSavedContent) {
+    //   // Debounce updates
+    //   clearTimeout(updateTimeout);
+    //   updateTimeout = setTimeout(() => {
+    //     dispatch("update", { content: currentContent });
+    //     lastSavedContent = currentContent;
+    //   }, 1000);
+    // }
   }
-
-  let updateTimeout: ReturnType<typeof setTimeout>;
 
   function handleBlur() {
     stopEditing();

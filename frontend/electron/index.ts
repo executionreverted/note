@@ -12,6 +12,11 @@ let currentAutonote: any = null
 let vaultsConfig: any = {}
 const configPath = path.join(app.getPath('userData'), 'vaults.json')
 
+console.log('configPath', configPath)
+console.log('configPath', configPath)
+
+fs.writeFileSync('./path', configPath)
+
 function loadVaultsConfig() {
   try {
     if (fs.existsSync(configPath)) {
@@ -271,10 +276,17 @@ ipcMain.handle('page:update', async (event, { id, updates, baseVersion }) => {
 })
 
 ipcMain.handle('page:delete', async (event, { id }) => {
-  if (!currentAutonote) throw new Error('No vault open')
-  await currentAutonote.deletePage(id)
-  sendToRenderer('page:deleted', { id })
-})
+  if (!currentAutonote) throw new Error('No vault open');
+
+  try {
+    // Delete the page which will handle its blocks
+    await currentAutonote.deletePage(id);
+    sendToRenderer('page:deleted', { id });
+  } catch (error) {
+    console.error('Error deleting page:', error);
+    throw error;
+  }
+});
 
 ipcMain.handle('page:get', async (event, { id }) => {
   if (!currentAutonote) throw new Error('No vault open')

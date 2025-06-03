@@ -530,7 +530,17 @@ class Autonote extends ReadyResource {
   }
 
   async deletePage(id) {
-    await this.base.append(dispatch('@autonote/delete-page', { id }))
+    // First get all blocks associated with this page
+    const blocks = await this.getBlocksByPage(id);
+
+    // Delete each block using the block manager
+    const blockManager = await this.getBlockManager();
+    for (const block of blocks) {
+      await blockManager.deleteBlock(block.id);
+    }
+
+    // Then delete the page itself
+    await this.base.append(dispatch('@autonote/delete-page', { id }));
   }
 
   async getPage(id) {
