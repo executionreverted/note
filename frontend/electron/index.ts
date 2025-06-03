@@ -387,7 +387,8 @@ ipcMain.handle('blocks:update', async (event, { id, updates }) => {
 
 ipcMain.handle('blocks:delete', async (event, { id }) => {
   if (!currentAutonote) throw new Error('No vault open');
-  await currentAutonote.deleteBlock(id);
+  console.log('DELETE BLOCK, ', id)
+  await currentAutonote.deleteBlock(id); // Pass string id directly
   sendToRenderer('block:deleted', { id });
 });
 

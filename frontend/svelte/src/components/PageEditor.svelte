@@ -3,7 +3,6 @@
   import { onMount, onDestroy, createEventDispatcher } from "svelte";
   import { storeActions, currentPage } from "../lib/stores";
   import type { Page } from "../lib/ipc";
-  import { ipc } from "../lib/ipc";
   import BlockEditor from "./BlockEditor.svelte";
 
   export let page: Page;
@@ -11,7 +10,6 @@
   const dispatch = createEventDispatcher();
 
   let title = "";
-  let content = "";
   let tags = "";
   let starred = false;
   let isEditing = false;
@@ -19,10 +17,10 @@
   let saveTimeout: ReturnType<typeof setTimeout>;
   let currentPageId = "";
   let lastKnownVersion = 0;
-  let showConflictDialog = false;
-  let conflictData = null;
-  let showBlockEditor = false;
   let isMigrating = false;
+  let hasMigrated = false;
+  let blockCount = 0;
+
   // Watch for external updates to currentPage
   $: if (
     $currentPage &&
@@ -37,6 +35,7 @@
   // Update local state when page prop changes
   $: if (page && page.id !== currentPageId) {
     loadPageContent(page);
+    checkBlocksMigration();
   }
 
   // Auto-save after 30 seconds of inactivity
@@ -49,16 +48,42 @@
     }, 30000);
   }
 
+  async function checkBlocksMigration() {
+    if (!page?.id) return;
+
+    try {
+      const blocks = await storeActions.getBlocksByPage(page.id);
+      blockCount = blocks.length;
+      hasMigrated = blockCount > 0;
+      console.log(
+        `Page ${page.id} has ${blockCount} blocks, migrated: ${hasMigrated}`,
+      );
+    } catch (error) {
+      console.error("Failed to check blocks:", error);
+      hasMigrated = false;
+      blockCount = 0;
+    }
+  }
+
   async function migrateToBlocks() {
     if (!page || !page.id) return;
 
     isMigrating = true;
     try {
-      await storeActions.migratePageToBlocks(page.id);
-      showBlockEditor = true;
+      console.log("Starting migration for page:", page.id);
+      const blocks = await storeActions.migratePageToBlocks(page.id);
+      console.log("Migration completed, created blocks:", blocks.length);
+
+      blockCount = blocks.length;
+      hasMigrated = true;
+
+      // Clear the page content since it's now in blocks
+      if (blocks.length > 0) {
+        await storeActions.updatePage(page.id, { content: "" });
+      }
     } catch (error) {
       console.error("Failed to migrate page:", error);
-      alert("Failed to migrate page to blocks.");
+      alert("Failed to migrate page to blocks: " + error.message);
     } finally {
       isMigrating = false;
     }
@@ -68,7 +93,6 @@
     if (!pageData) return;
 
     title = pageData.title;
-    content = pageData.content || "";
     tags = pageData.tags.join(", ");
     starred = pageData.starred || false;
     currentPageId = pageData.id;
@@ -77,14 +101,8 @@
     isEditing = false;
     clearTimeout(saveTimeout);
 
-    showBlockEditor = true;
-
-    // Check if page has blocks (if not, migrate them)
-    const blocks = await storeActions.getBlocksByPage(pageData.id);
-    if (blocks.length === 0) {
-      // Auto-migrate to blocks
-      await storeActions.migratePageToBlocks(pageData.id);
-    }
+    // Check if this page has been migrated to blocks
+    await checkBlocksMigration();
   }
 
   function markDirty() {
@@ -124,7 +142,6 @@
       currentPageId,
       {
         title: title.trim() || "Untitled",
-        content,
         tags: tagsArray,
         starred,
       },
@@ -136,117 +153,10 @@
     clearTimeout(saveTimeout);
   }
 
-  async function resolveConflict(
-    resolution: "keep-ours" | "keep-theirs" | "merge",
-  ) {
-    if (!conflictData) return;
-
-    try {
-      if (resolution === "keep-theirs") {
-        title = conflictData.current.title;
-        content = conflictData.current.content || "";
-        tags = conflictData.current.tags.join(", ");
-        starred = conflictData.current.starred || false;
-        lastKnownVersion = conflictData.current.updatedAt;
-        hasUnsavedChanges = false;
-      } else if (resolution === "keep-ours") {
-        await saveWithoutConflictCheck();
-      } else if (resolution === "merge") {
-        const mergedContent =
-          content +
-          "\n\n--- PEER CHANGES (merged) ---\n" +
-          (conflictData.current.content || "");
-
-        content = mergedContent;
-        await saveWithoutConflictCheck();
-      }
-
-      showConflictDialog = false;
-      conflictData = null;
-    } catch (error) {
-      console.error("Failed to resolve conflict:", error);
-    }
-  }
-
   async function deletePage() {
     if (confirm(`Delete "${page.title}"?`)) {
       await storeActions.deletePage(page.id);
     }
-  }
-
-  function formatText(format: string) {
-    const textarea = document.getElementById(
-      "content-editor",
-    ) as HTMLTextAreaElement;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = content.substring(start, end);
-
-    let replacement = "";
-    switch (format) {
-      case "bold":
-        replacement = `**${selectedText}**`;
-        break;
-      case "italic":
-        replacement = `*${selectedText}*`;
-        break;
-      case "code":
-        replacement = `\`${selectedText}\``;
-        break;
-      case "header1":
-        replacement = `# ${selectedText}`;
-        break;
-      case "header2":
-        replacement = `## ${selectedText}`;
-        break;
-      case "header3":
-        replacement = `### ${selectedText}`;
-        break;
-      case "bullet":
-        replacement = `- ${selectedText}`;
-        break;
-      case "number":
-        replacement = `1. ${selectedText}`;
-        break;
-      case "quote":
-        replacement = `> ${selectedText}`;
-        break;
-    }
-
-    content =
-      content.substring(0, start) + replacement + content.substring(end);
-    markDirty();
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(
-        start + replacement.length,
-        start + replacement.length,
-      );
-    }, 0);
-  }
-
-  function renderMarkdown(text: any) {
-    if (!text) return '<p class="placeholder">Start writing your note...</p>';
-
-    return text
-      .replace(/^### (.*$)/gim, "<h3>$1</h3>")
-      .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-      .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-      .replace(/\*\*(.*)\*\*/gim, "<strong>$1</strong>")
-      .replace(/\*(.*)\*/gim, "<em>$1</em>")
-      .replace(/`(.*?)`/gim, "<code>$1</code>")
-      .replace(
-        /\[([^\]]+)\]\(([^)]+)\)/gim,
-        '<a href="$2" target="_blank">$1</a>',
-      )
-      .replace(/\n/gim, "<br>")
-      .replace(/^> (.*$)/gim, "<blockquote>$1</blockquote>")
-      .replace(/^\* (.*$)/gim, "<li>$1</li>")
-      .replace(/^- (.*$)/gim, "<li>$1</li>")
-      .replace(/^(\d+)\. (.*$)/gim, "<li>$2</li>");
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -324,76 +234,16 @@
     />
   </div>
 
-  <!-- Toolbar -->
-  <div class="toolbar">
-    <div class="toolbar-group">
-      <button on:click={() => formatText("bold")} title="Bold">
-        <strong>B</strong>
-      </button>
-      <button on:click={() => formatText("italic")} title="Italic">
-        <em>I</em>
-      </button>
-      <button on:click={() => formatText("code")} title="Code"> Code </button>
-    </div>
-
-    <div class="toolbar-group">
-      <button on:click={() => formatText("header1")} title="Header 1">
-        H1
-      </button>
-      <button on:click={() => formatText("header2")} title="Header 2">
-        H2
-      </button>
-      <button on:click={() => formatText("header3")} title="Header 3">
-        H3
-      </button>
-    </div>
-
-    <div class="toolbar-group">
-      <button on:click={() => formatText("bullet")} title="Bullet List">
-        List
-      </button>
-      <button on:click={() => formatText("number")} title="Numbered List">
-        Numbered
-      </button>
-      <button on:click={() => formatText("quote")} title="Quote">
-        Quote
-      </button>
-    </div>
-  </div>
-
-  {#if showBlockEditor}
-    <!-- Block Editor -->
-    <BlockEditor pageId={page.id} readOnly={false} />
-  {:else}
-    <!-- Original content editor -->
-    <div class="editor-content">
-      <!-- Content Editor -->
-      <div class="editor-content">
-        <div class="editor-pane">
-          <textarea
-            id="content-editor"
-            bind:value={content}
-            on:input={markDirty}
-            on:focus={startEditing}
-            on:blur={stopEditing}
-            placeholder="Start writing your note..."
-            class="content-textarea"
-          ></textarea>
-        </div>
-
-        <div class="preview-pane">
-          <div class="preview-content">
-            {@html renderMarkdown(content)}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add migration button -->
+  <!-- Migration Banner (only show if not migrated and has content) -->
+  {#if !hasMigrated && !isMigrating && page.content}
     <div class="migration-banner">
-      <p>
-        This page uses the legacy editor. Migrate to the new block-based editor?
-      </p>
+      <div class="migration-info">
+        <p>
+          <strong>Upgrade Available:</strong> This page uses the legacy editor. Migrate
+          to the new block-based editor for better collaboration and formatting.
+        </p>
+        <small>Your content will be automatically converted to blocks.</small>
+      </div>
       <button
         class="btn-primary"
         on:click={migrateToBlocks}
@@ -404,12 +254,45 @@
     </div>
   {/if}
 
+  <!-- Migration Status -->
+  {#if isMigrating}
+    <div class="migration-status">
+      <div class="spinner"></div>
+      <span>Converting your content to blocks...</span>
+    </div>
+  {/if}
+
+  <!-- Block Editor (show if migrated or no content) -->
+  {#if hasMigrated || (!page.content && !isMigrating)}
+    <BlockEditor pageId={page.id} readOnly={false} />
+  {:else if page.content && !hasMigrated && !isMigrating}
+    <!-- Show legacy content with migration prompt -->
+    <div class="legacy-content">
+      <div class="legacy-preview">
+        <h3>Legacy Content Preview:</h3>
+        <div class="content-preview">
+          {page.content.substring(0, 300)}{page.content.length > 300
+            ? "..."
+            : ""}
+        </div>
+        <p class="migration-note">
+          <em
+            >This content will be converted to editable blocks after migration.</em
+          >
+        </p>
+      </div>
+    </div>
+  {/if}
+
   <!-- Status -->
   <div class="editor-status">
     <span class="last-modified">
       Last modified: {new Date(page.updatedAt).toLocaleString()}
     </span>
     <div class="status-indicators">
+      {#if blockCount > 0}
+        <span class="block-count">{blockCount} blocks</span>
+      {/if}
       {#if hasUnsavedChanges}
         <span class="unsaved-status">Unsaved changes</span>
       {/if}
@@ -419,65 +302,6 @@
     </div>
   </div>
 </div>
-
-<!-- Conflict Resolution Dialog -->
-{#if showConflictDialog && conflictData}
-  <div class="modal-backdrop">
-    <div class="conflict-modal">
-      <div class="modal-header">
-        <h2>Merge Conflict</h2>
-        <p>This page was modified by another user while you were editing.</p>
-      </div>
-
-      <div class="conflict-content">
-        <div class="conflict-section">
-          <h4>Your Version:</h4>
-          <div class="conflict-preview">
-            <strong>Title:</strong>
-            {conflictData.ours.title}<br />
-            <strong>Content:</strong>
-            {conflictData.ours.content.substring(0, 200)}{conflictData.ours
-              .content.length > 200
-              ? "..."
-              : ""}
-          </div>
-        </div>
-
-        <div class="conflict-section">
-          <h4>Their Version:</h4>
-          <div class="conflict-preview">
-            <strong>Title:</strong>
-            {conflictData.current.title}<br />
-            <strong>Content:</strong>
-            {(conflictData.current.content || "").substring(0, 200)}{(
-              conflictData.current.content || ""
-            ).length > 200
-              ? "..."
-              : ""}
-          </div>
-        </div>
-      </div>
-
-      <div class="conflict-actions">
-        <button
-          class="btn-secondary"
-          on:click={() => resolveConflict("keep-theirs")}
-        >
-          Use Their Version
-        </button>
-        <button class="btn-secondary" on:click={() => resolveConflict("merge")}>
-          Merge Both
-        </button>
-        <button
-          class="btn-primary"
-          on:click={() => resolveConflict("keep-ours")}
-        >
-          Keep My Version
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <style>
   .page-editor {
@@ -594,112 +418,88 @@
     background: #f8f9fa;
   }
 
-  .toolbar {
+  .migration-banner {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    margin: 1rem;
+    background: linear-gradient(135deg, #e3f2fd 0%, #f8f9fa 100%);
+    border: 1px solid #4a90e2;
+    border-radius: 8px;
     gap: 1rem;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #e0e0e0;
-    background: #f8f9fa;
   }
 
-  .toolbar-group {
+  .migration-info p {
+    margin: 0 0 0.25rem 0;
+    color: #333;
+  }
+
+  .migration-info small {
+    color: #666;
+    font-size: 0.8rem;
+  }
+
+  .migration-status {
     display: flex;
-    gap: 0.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+    color: #666;
   }
 
-  .toolbar button {
-    background: white;
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e0e0e0;
+    border-radius: 50%;
+    border-top-color: #4a90e2;
+    animation: spin 1s ease-in-out infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .legacy-content {
+    padding: 1rem;
+    flex: 1;
+  }
+
+  .legacy-preview {
+    background: #f8f9fa;
     border: 1px solid #dee2e6;
-    padding: 0.375rem 0.75rem;
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .legacy-preview h3 {
+    margin: 0 0 1rem 0;
+    color: #333;
+  }
+
+  .content-preview {
+    background: white;
+    padding: 1rem;
     border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    transition: background-color 0.2s;
-  }
-
-  .toolbar button:hover {
-    background: #e9ecef;
-  }
-
-  .editor-content {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-  }
-
-  .editor-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .content-textarea {
-    flex: 1;
-    border: none;
-    outline: none;
-    padding: 1rem;
-    font-family: "Menlo", "Monaco", "Courier New", monospace;
-    font-size: 0.875rem;
+    border: 1px solid #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
     line-height: 1.6;
-    resize: none;
-    background: #fafafa;
+    white-space: pre-wrap;
+    margin-bottom: 1rem;
   }
 
-  .preview-pane {
-    flex: 1;
-    border-left: 1px solid #e0e0e0;
-    overflow-y: auto;
-  }
-
-  .preview-content {
-    padding: 1rem;
-    line-height: 1.6;
-    font-size: 0.875rem;
-  }
-
-  .preview-content :global(h1) {
-    font-size: 1.5rem;
-    margin: 1rem 0 0.5rem 0;
-    font-weight: 600;
-  }
-
-  .preview-content :global(h2) {
-    font-size: 1.25rem;
-    margin: 1rem 0 0.5rem 0;
-    font-weight: 600;
-  }
-
-  .preview-content :global(h3) {
-    font-size: 1.1rem;
-    margin: 1rem 0 0.5rem 0;
-    font-weight: 600;
-  }
-
-  .preview-content :global(code) {
-    background: #f8f9fa;
-    padding: 0.125rem 0.25rem;
-    border-radius: 3px;
-    font-family: "Menlo", "Monaco", "Courier New", monospace;
-    font-size: 0.8rem;
-  }
-
-  .preview-content :global(blockquote) {
-    border-left: 4px solid #dee2e6;
-    padding-left: 1rem;
-    margin: 1rem 0;
-    color: #6c757d;
-  }
-
-  .preview-content :global(li) {
-    list-style: disc;
-    margin-left: 1.5rem;
-    margin-bottom: 0.25rem;
-  }
-
-  .preview-content :global(.placeholder) {
-    color: #adb5bd;
+  .migration-note {
+    color: #666;
     font-style: italic;
+    margin: 0;
+    text-align: center;
   }
 
   .editor-status {
@@ -718,6 +518,11 @@
     gap: 1rem;
   }
 
+  .block-count {
+    color: #4a90e2;
+    font-weight: 500;
+  }
+
   .unsaved-status {
     color: #dc3545;
     font-weight: 500;
@@ -725,87 +530,6 @@
 
   .editing-status {
     color: #28a745;
-  }
-
-  .modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .conflict-modal {
-    background: white;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    overflow: auto;
-  }
-
-  .modal-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid #e0e0e0;
-  }
-
-  .modal-header h2 {
-    margin: 0 0 0.5rem 0;
-    color: #dc3545;
-  }
-
-  .modal-header p {
-    margin: 0;
-    color: #666;
-  }
-
-  .conflict-content {
-    padding: 1.5rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-  }
-
-  .conflict-section h4 {
-    margin: 0 0 0.5rem 0;
-    color: #333;
-  }
-
-  .conflict-preview {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 4px;
-    font-size: 0.875rem;
-    border: 1px solid #e0e0e0;
-  }
-
-  .conflict-actions {
-    padding: 1.5rem;
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-    border-top: 1px solid #e0e0e0;
-  }
-
-  .migration-banner {
-    padding: 0.75rem;
-    margin: 1rem;
-    background-color: #f0f7ff;
-    border: 1px solid #4a90e2;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .migration-banner p {
-    margin: 0;
-    color: #333;
   }
 </style>
 
