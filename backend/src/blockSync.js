@@ -147,6 +147,14 @@ class BlockSyncManager extends EventEmitter {
       peers: Array.from(this.connectedPeers)
     }
   }
+
+  _emitBlockUpdated(data) {
+    const hash = this._getDataHash(data);
+    if (this.lastEmittedHashes.get(`block:updated:${data.id}`) !== hash) {
+      this.lastEmittedHashes.set(`block:updated:${data.id}`, hash);
+      this.emit('block:updated', data);
+    }
+  }
 }
 
 module.exports = BlockSyncManager

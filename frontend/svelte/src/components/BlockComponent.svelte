@@ -1,8 +1,13 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, afterUpdate } from "svelte";
   import { queueLocalOperation } from "../lib/blockSync";
   import CollaborationIndicator from "./CollaborationIndicator.svelte";
   import type { Block } from "../lib/types";
+  import {
+    onMount,
+    onDestroy,
+    afterUpdate,
+    createEventDispatcher,
+  } from "svelte";
 
   export let block: Block;
   export let readOnly: boolean = false;
@@ -35,7 +40,44 @@
         if (contentEl) contentEl.focus();
       }, 10);
     }
+
+    // Add event listener for real-time updates
+    window.addEventListener("block-updated", handleBlockUpdate);
+    window.addEventListener("block-operation-applied", handleOperationApplied);
   });
+
+  onDestroy(() => {
+    window.removeEventListener("block-updated", handleBlockUpdate);
+    window.removeEventListener(
+      "block-operation-applied",
+      handleOperationApplied,
+    );
+  });
+
+  function handleBlockUpdate(event: CustomEvent) {
+    const updatedBlock = event.detail;
+    if (updatedBlock.id === block.id) {
+      // Only update if it's not from our own edits
+      if (updatedBlock.updatedBy !== block.updatedBy) {
+        block = updatedBlock;
+        currentContent = updatedBlock.content;
+        lastSavedContent = updatedBlock.content;
+        currentMetadata = JSON.parse(updatedBlock.metadata || "{}");
+      }
+    }
+  }
+
+  function handleOperationApplied(event: CustomEvent) {
+    const { operation, block: updatedBlock } = event.detail;
+    if (updatedBlock.id === block.id) {
+      // Only apply if it's not our own operation
+      if (!isEditing) {
+        block = updatedBlock;
+        currentContent = updatedBlock.content;
+        lastSavedContent = updatedBlock.content;
+      }
+    }
+  }
 
   afterUpdate(() => {
     // Restore cursor position after component updates

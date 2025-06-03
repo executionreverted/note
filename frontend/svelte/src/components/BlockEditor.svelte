@@ -1,6 +1,6 @@
 <!-- frontend/svelte/src/components/BlockEditor.svelte -->
 <script lang="ts">
-  import { onMount, createEventDispatcher } from "svelte";
+  import { onDestroy, onMount, createEventDispatcher } from "svelte";
   import { storeActions } from "../lib/stores";
   import BlockComponent from "./BlockComponent.svelte";
   import AddBlockButton from "./AddBlockButton.svelte";
@@ -18,7 +18,36 @@
 
   onMount(async () => {
     await loadBlocks();
+
+    // Listen for block updates from peers
+    window.addEventListener("block-updated", handleBlockUpdate);
   });
+
+  // Add cleanup:
+  onDestroy(() => {
+    window.removeEventListener("block-updated", handleBlockUpdate);
+  });
+
+  function handleBlockUpdate(event: CustomEvent) {
+    const updatedBlock = event.detail;
+
+    // Only update if we have this page loaded
+    if (updatedBlock.pageId === pageId) {
+      // Check if this block is already in our list
+      const index = blocks.findIndex((b) => b.id === updatedBlock.id);
+
+      if (index >= 0) {
+        // Update existing block
+        blocks[index] = updatedBlock;
+        blocks = [...blocks]; // Force Svelte to update
+      } else {
+        // New block - add it in the right position
+        blocks = [...blocks, updatedBlock].sort(
+          (a, b) => a.position - b.position,
+        );
+      }
+    }
+  }
 
   async function loadBlocks() {
     isLoading = true;

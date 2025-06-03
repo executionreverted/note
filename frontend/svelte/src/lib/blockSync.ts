@@ -54,8 +54,9 @@ export function setupBlockSyncListeners() {
     });
   });
 
-  // Listen for block updates
-  ipc.on('block-sync:block-updated', (block: Block) => {
+  // Listen for block updates - these are the critical event handlers for real-time sync
+  ipc.on('block:updated', (block: Block) => {
+    console.log('Block updated by peer:', block.id);
     blockVersions.update(versions => {
       const newVersions = new Map(versions);
       newVersions.set(block.id, block.version);
@@ -68,10 +69,14 @@ export function setupBlockSyncListeners() {
       newPending.delete(block.id);
       return newPending;
     });
+
+    // Emit a custom event that components can listen for
+    window.dispatchEvent(new CustomEvent('block-updated', { detail: block }));
   });
 
   // Listen for operations being applied
-  ipc.on('block-sync:operation-applied', (data: { operation: any, block: Block }) => {
+  ipc.on('block:operation-applied', (data: { operation: any, block: Block }) => {
+    console.log('Operation applied to block:', data.block.id);
     blockVersions.update(versions => {
       const newVersions = new Map(versions);
       newVersions.set(data.block.id, data.block.version);
@@ -104,6 +109,14 @@ export function setupBlockSyncListeners() {
 
       return newPending;
     });
+
+    // Emit a custom event for the operation
+    window.dispatchEvent(new CustomEvent('block-operation-applied', {
+      detail: {
+        operation: data.operation,
+        block: data.block
+      }
+    }));
   });
 }
 
